@@ -1,0 +1,184 @@
+// This is your Prisma schema file
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Kategori {
+  id         Int      @id @default(autoincrement()) @map("IdKategori")
+  nama       String   @unique @map("NamaKategori") @db.VarChar(50)
+  items      Item[]
+
+  @@map("tbl_kategori")
+}
+
+model Supplier {
+  id            Int         @id @default(autoincrement()) @map("IdSupplier")
+  nama          String      @map("NamaSupplier") @db.VarChar(100)
+  alamat        String?     @map("AlamatSupplier") @db.Text
+  noTelp        String?     @map("NoTelpSupplier") @db.VarChar(20)
+  email         String?     @map("EmailSupplier") @db.VarChar(100)
+  items         Item[]
+  pembelian     PembelianKeSupplier[]
+
+  @@map("tbl_supplier")
+}
+
+model Role {
+  id        Int     @id @default(autoincrement()) @map("IdRole")
+  nama      String  @unique @map("NamaRole") @db.VarChar(50)
+  users     User[]
+
+  @@map("tbl_role")
+}
+
+model User {
+  id            Int       @id @default(autoincrement()) @map("IdUser")
+  nama          String    @map("NamaUser") @db.VarChar(100)
+  username      String    @unique @map("Username") @db.VarChar(50)
+  passwordHash  String    @map("PasswordHash") @db.VarChar(255)
+  roleId        Int       @map("IdRole")
+  role          Role      @relation(fields: [roleId], references: [id])
+  transaksi     TransaksiPenjualan[]
+  pembelian     PembelianKeSupplier[]
+  penyesuaian   PenyesuaianStok[]
+
+  @@map("tbl_user")
+}
+
+model Item {
+  id              Int       @id @default(autoincrement()) @map("ItemId")
+  nama            String    @map("NamaItem") @db.VarChar(100)
+  kategoriId      Int?      @map("IdKategori")
+  hargaJual       Decimal   @map("HargaJual") @db.Decimal(10, 2)
+  hargaBeli       Decimal?  @map("HargaBeli") @db.Decimal(10, 2)
+  stok            Int       @default(0) @map("Stok")
+  stokMinimum     Int?      @default(0) @map("StokMinimum")
+  manufacture     String?   @db.VarChar(50)
+  kodeBarcode     String?   @unique @map("KodeBarcode") @db.VarChar(50)
+  supplierId      Int?      @map("IdSupplier")
+  satuan          String?   @default("Pcs") @db.VarChar(20)
+  kategori        Kategori? @relation(fields: [kategoriId], references: [id])
+  supplier        Supplier? @relation(fields: [supplierId], references: [id])
+  detailTransaksi DetailTransaksiPenjualan[]
+  detailPembelian DetailPembelianKeSupplier[]
+  penyesuaianStok PenyesuaianStok[]
+
+  @@index([nama], map: "idx_item_nama")
+  @@index([kodeBarcode], map: "idx_item_barcode")
+  @@map("tbl_item")
+}
+
+model Pelanggan {
+  id                Int       @id @default(autoincrement()) @map("IdPelanggan")
+  nama              String    @map("NamaPelanggan") @db.VarChar(100)
+  jenisKelamin      String?   @map("JK") @db.VarChar(10)
+  noTelp            String?   @map("NoPhone") @db.VarChar(20)
+  alamat            String?   @db.Text
+  email             String?   @unique @db.VarChar(100)
+  poinLoyalitas     Int?      @default(0) @map("PoinLoyalitas")
+  tanggalRegistrasi DateTime? @default(now()) @map("TanggalRegistrasi")
+  transaksi         TransaksiPenjualan[]
+
+  @@map("tbl_pelanggan")
+}
+
+model TransaksiPenjualan {
+  id                    Int       @id @default(autoincrement()) @map("IdTransaksi")
+  nomorStruk           String    @unique @map("NomorStruk") @db.VarChar(50)
+  pelangganId          Int?      @map("IdPelanggan")
+  userId               Int       @map("IdUser")
+  tanggalTransaksi     DateTime  @default(now()) @map("TanggalWaktuTransaksi")
+  metodePembayaran     String    @map("MetodePembayaran") @db.VarChar(50)
+  subtotal             Decimal   @default(0.00) @map("SubtotalTransaksi") @db.Decimal(12, 2)
+  totalDiskon          Decimal?  @default(0.00) @map("TotalDiskon") @db.Decimal(12, 2)
+  totalPajak           Decimal?  @default(0.00) @map("TotalPajak") @db.Decimal(12, 2)
+  grandTotal          Decimal   @map("GrandTotal") @db.Decimal(12, 2)
+  jumlahBayar         Decimal?  @map("JumlahBayar") @db.Decimal(12, 2)
+  kembalian           Decimal?  @map("Kembalian") @db.Decimal(12, 2)
+  catatan             String?   @db.Text
+  pelanggan           Pelanggan? @relation(fields: [pelangganId], references: [id])
+  user                User      @relation(fields: [userId], references: [id])
+  detailTransaksi     DetailTransaksiPenjualan[]
+
+  @@index([tanggalTransaksi], map: "idx_transaksi_tanggal")
+  @@index([nomorStruk], map: "idx_transaksi_nostruk")
+  @@map("tbl_transaksi_penjualan")
+}
+
+model DetailTransaksiPenjualan {
+  id                    Int       @id @default(autoincrement()) @map("IdDetailTransaksi")
+  transaksiId           Int       @map("IdTransaksi")
+  itemId                Int       @map("ItemId")
+  namaItemSaatTransaksi String    @map("NamaItemSaatTransaksi") @db.VarChar(100)
+  jumlah                Int       @map("Jumlah")
+  hargaJualSaatTransaksi Decimal   @map("HargaJualSaatTransaksi") @db.Decimal(10, 2)
+  diskonItemPersen      Decimal?  @default(0.00) @map("DiskonItemPersen") @db.Decimal(5, 2)
+  diskonItemNominal     Decimal?  @default(0.00) @map("DiskonItemNominal") @db.Decimal(10, 2)
+  subtotal              Decimal   @map("Subtotal") @db.Decimal(12, 2)
+  transaksi             TransaksiPenjualan @relation(fields: [transaksiId], references: [id])
+  item                  Item      @relation(fields: [itemId], references: [id])
+
+  @@index([transaksiId], map: "idx_detail_transaksi_idtransaksi")
+  @@index([itemId], map: "idx_detail_transaksi_itemid")
+  @@map("tbl_detail_transaksi_penjualan")
+}
+
+model PembelianKeSupplier {
+  id                Int       @id @default(autoincrement()) @map("IdPembelian")
+  nomorPO           String?   @unique @map("NomorPO") @db.VarChar(50)
+  nomorFaktur       String?   @map("NomorFakturSupplier") @db.VarChar(50)
+  supplierId        Int       @map("IdSupplier")
+  userPenerimaId    Int       @map("IdUserPenerima")
+  tanggalPesan      DateTime? @map("TanggalPesan")
+  tanggalJatuhTempo DateTime? @map("TanggalJatuhTempo")
+  tanggalTerima     DateTime? @map("TanggalTerima")
+  subtotal          Decimal   @default(0.00) @map("SubtotalPembelian") @db.Decimal(12, 2)
+  diskon            Decimal?  @default(0.00) @map("DiskonPembelian") @db.Decimal(12, 2)
+  pajak             Decimal?  @default(0.00) @map("PajakPembelian") @db.Decimal(12, 2)
+  biayaLain         Decimal?  @default(0.00) @map("BiayaLain") @db.Decimal(12, 2)
+  total             Decimal   @map("TotalPembelian") @db.Decimal(12, 2)
+  status            String    @default("Pending") @map("StatusPembelian") @db.VarChar(20)
+  catatan           String?   @db.Text
+  supplier          Supplier  @relation(fields: [supplierId], references: [id])
+  userPenerima      User      @relation(fields: [userPenerimaId], references: [id])
+  detailPembelian   DetailPembelianKeSupplier[]
+
+  @@map("tbl_pembelian_ke_supplier")
+}
+
+model DetailPembelianKeSupplier {
+  id              Int       @id @default(autoincrement()) @map("IdDetailPembelian")
+  pembelianId     Int       @map("IdPembelian")
+  itemId          Int       @map("ItemId")
+  jumlahPesan     Int       @map("JumlahPesan")
+  jumlahTerima    Int?      @default(0) @map("JumlahTerima")
+  hargaBeli       Decimal   @map("HargaBeliSatuan") @db.Decimal(10, 2)
+  subtotal        Decimal   @map("Subtotal") @db.Decimal(12, 2)
+  pembelian       PembelianKeSupplier @relation(fields: [pembelianId], references: [id])
+  item            Item      @relation(fields: [itemId], references: [id])
+
+  @@map("tbl_detail_pembelian_ke_supplier")
+}
+
+model PenyesuaianStok {
+  id                Int       @id @default(autoincrement()) @map("IdPenyesuaian")
+  nomorReferensi    String?   @unique @map("NomorReferensi") @db.VarChar(50)
+  itemId            Int       @map("ItemId")
+  userId            Int       @map("IdUser")
+  tanggal           DateTime  @default(now()) @map("TanggalPenyesuaian")
+  jenisPenyesuaian  String    @map("JenisPenyesuaian") @db.VarChar(20)
+  tipeOperasi       String    @map("TipeOperasi") @db.VarChar(10)
+  jumlah            Int       @map("Jumlah")
+  stokSebelum       Int       @map("StokSebelum")
+  stokSesudah       Int       @map("StokSesudah")
+  keterangan        String?   @db.Text
+  item              Item      @relation(fields: [itemId], references: [id])
+  user              User      @relation(fields: [userId], references: [id])
+
+  @@map("tbl_penyesuaian_stok")
+}
