@@ -1,6 +1,7 @@
 // This is your Prisma schema file
 generator client {
   provider = "prisma-client-js"
+  binaryTargets = ["native", "darwin"]
 }
 
 datasource db {
@@ -22,34 +23,12 @@ model Supplier {
   alamat        String?     @map("AlamatSupplier") @db.Text
   noTelp        String?     @map("NoTelpSupplier") @db.VarChar(20)
   email         String?     @map("EmailSupplier") @db.VarChar(100)
+  createdAt DateTime? @default(now()) @map("createdAt")
   items         Item[]
   pembelian     PembelianKeSupplier[]
 
   @@map("tbl_supplier")
 }
-
-model Role {
-  id        Int     @id @default(autoincrement()) @map("IdRole")
-  nama      String  @unique @map("NamaRole") @db.VarChar(50)
-  users     User[]
-
-  @@map("tbl_role")
-}
-
-model User {
-  id            Int       @id @default(autoincrement()) @map("IdUser")
-  nama          String    @map("NamaUser") @db.VarChar(100)
-  username      String    @unique @map("Username") @db.VarChar(50)
-  passwordHash  String    @map("PasswordHash") @db.VarChar(255)
-  roleId        Int       @map("IdRole")
-  role          Role      @relation(fields: [roleId], references: [id])
-  transaksi     TransaksiPenjualan[]
-  pembelian     PembelianKeSupplier[]
-  penyesuaian   PenyesuaianStok[]
-
-  @@map("tbl_user")
-}
-
 model Item {
   id              Int       @id @default(autoincrement()) @map("ItemId")
   nama            String    @map("NamaItem") @db.VarChar(100)
@@ -102,7 +81,6 @@ model TransaksiPenjualan {
   kembalian           Decimal?  @map("Kembalian") @db.Decimal(12, 2)
   catatan             String?   @db.Text
   pelanggan           Pelanggan? @relation(fields: [pelangganId], references: [id])
-  user                User      @relation(fields: [userId], references: [id])
   detailTransaksi     DetailTransaksiPenjualan[]
 
   @@index([tanggalTransaksi], map: "idx_transaksi_tanggal")
@@ -145,7 +123,6 @@ model PembelianKeSupplier {
   status            String    @default("Pending") @map("StatusPembelian") @db.VarChar(20)
   catatan           String?   @db.Text
   supplier          Supplier  @relation(fields: [supplierId], references: [id])
-  userPenerima      User      @relation(fields: [userPenerimaId], references: [id])
   detailPembelian   DetailPembelianKeSupplier[]
 
   @@map("tbl_pembelian_ke_supplier")
@@ -178,7 +155,6 @@ model PenyesuaianStok {
   stokSesudah       Int       @map("StokSesudah")
   keterangan        String?   @db.Text
   item              Item      @relation(fields: [itemId], references: [id])
-  user              User      @relation(fields: [userId], references: [id])
 
   @@map("tbl_penyesuaian_stok")
 }
