@@ -1,10 +1,70 @@
 "use server";
 
-import { prisma } from "@/lib/db"; // Make sure this path to your Prisma client is correct
+import { prisma } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 import { Prisma } from "@prisma/client";
-// Import schema from the new location
 import { createItemSchema, CreateItemPayload } from "@/lib/schemas/item.schema";
+
+type ActionResponse = {
+  success: boolean;
+  message?: string;
+  fieldErrors?: Record<string, string[]>;
+};
+
+export async function updateItemAction(
+  itemId: number,
+  data: CreateItemPayload
+): Promise<ActionResponse> {
+  try {
+    const validationResult = createItemSchema.safeParse(data);
+
+    if (!validationResult.success) {
+      return {
+        success: false,
+        fieldErrors: validationResult.error.flatten().fieldErrors,
+      };
+    }
+
+    const validData = validationResult.data;
+
+    await prisma.item.update({
+      where: { id: itemId },
+      data: {
+        nama: validData.nama,
+        kategoriId: validData.kategoriId,
+        hargaJual: validData.hargaJual,
+        hargaBeli: validData.hargaBeli,
+        stok: validData.stok,
+        stokMinimum: validData.stokMinimum,
+        kodeBarcode: validData.kodeBarcode,
+        supplierId: validData.supplierId,
+        satuan: validData.satuan,
+      },
+    });
+
+    revalidatePath("/items");
+    revalidatePath("/dashboard");
+
+    return {
+      success: true,
+      message: "Item berhasil diperbarui",
+    };
+  } catch (error) {
+    console.error("Error updating item:", error);
+    if (error instanceof Prisma.PrismaClientKnownRequestError) {
+      if (error.code === "P2002") {
+        return {
+          success: false,
+          message: "Kode barcode sudah digunakan oleh item lain.",
+        };
+      }
+    }
+    return {
+      success: false,
+      message: "Terjadi kesalahan saat memperbarui item",
+    };
+  }
+}
 
 // Existing deleteItemAction - NO CHANGES HERE
 export async function deleteItemAction(itemId: number) {

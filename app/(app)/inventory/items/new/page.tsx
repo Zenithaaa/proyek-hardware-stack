@@ -22,6 +22,7 @@ import {
   generateRandomBarcode,
 } from "@/components/barcode-generator";
 import { AddItemDialog } from "@/components/add-item-dialog";
+import { EditItemDialog } from "@/components/edit-item-dialog";
 import { ImportExportDialog } from "@/components/import-export-dialog";
 import {
   Select,
@@ -52,11 +53,24 @@ import {
 } from "@/components/ui/alert-dialog";
 
 import {
+  getCoreRowModel,
+  getPaginationRowModel,
+  useReactTable,
+} from "@tanstack/react-table";
+
+import {
   getItems,
   getKategori,
   getSupplier,
   deleteItemAction,
 } from "@/lib/actions/item.actions";
+import {
+  IconChevronLeft,
+  IconChevronRight,
+  IconChevronsLeft,
+  IconChevronsRight,
+} from "@tabler/icons-react";
+import { Label } from "@/components/ui/label";
 
 interface Item {
   id: number;
@@ -93,23 +107,36 @@ interface ItemsData {
 export default function InventoryItemsPage() {
   const router = useRouter();
   const [search, setSearch] = React.useState("");
+  const [debouncedSearch, setDebouncedSearch] = React.useState("");
   const [selectedKategori, setSelectedKategori] = React.useState("all");
   const [selectedSupplier, setSelectedSupplier] = React.useState("all");
   const [selectedStockStatus, setSelectedStockStatus] = React.useState("all");
   const [itemToDelete, setItemToDelete] = React.useState<number | null>(null);
+  const [pagination, setPagination] = React.useState({
+    pageIndex: 0,
+    pageSize: 10,
+  });
+
+  React.useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search);
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [search]);
 
   // Fetch data items
   const { data: itemsData, isLoading: isLoadingItems } = useQuery<ItemsData>({
     queryKey: [
       "items",
-      search,
+      debouncedSearch,
       selectedKategori,
       selectedSupplier,
       selectedStockStatus,
     ],
     queryFn: () =>
       getItems({
-        search,
+        search: debouncedSearch,
         kategoriId:
           selectedKategori !== "all" ? Number(selectedKategori) : undefined,
         supplierId:
@@ -146,6 +173,27 @@ export default function InventoryItemsPage() {
       toast.error("Terjadi kesalahan saat menghapus item");
     }
   };
+
+  const table = useReactTable({
+    data: itemsData?.data || [],
+    columns: [
+      { accessorKey: "id", header: "No." },
+      { accessorKey: "kodeBarcode", header: "Barcode" },
+      { accessorKey: "nama", header: "Nama Barang" },
+      { accessorKey: "kategori.nama", header: "Kategori" },
+      { accessorKey: "satuan", header: "Satuan" },
+      { accessorKey: "hargaBeli", header: "Harga Beli" },
+      { accessorKey: "hargaJual", header: "Harga Jual" },
+      { accessorKey: "stok", header: "Stok" },
+      { accessorKey: "stokMinimum", header: "Stok Min" },
+      { accessorKey: "supplier.nama", header: "Supplier" },
+      { id: "actions", cell: ({ row }) => row.original.id },
+    ],
+    state: { pagination },
+    onPaginationChange: setPagination,
+    getCoreRowModel: getCoreRowModel(),
+    getPaginationRowModel: getPaginationRowModel(),
+  });
 
   return (
     <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-8">
@@ -303,96 +351,177 @@ export default function InventoryItemsPage() {
 
             {/* Data State */}
             {!isLoadingItems &&
-              itemsData?.data?.map((item, index) => (
-                <TableRow key={item.id}>
-                  <TableCell>{index + 1}</TableCell>
-                  <TableCell>
-                    <div className="flex items-center justify-start gap-2">
-                      <BarcodeGenerator
-                        value={generateBarcodeForItem(item)}
-                        width={1.5}
-                        height={30}
-                      />
-                      <span className="text-xs text-muted-foreground">
-                        {item.kodeBarcode || "-"}
-                      </span>
-                    </div>
-                  </TableCell>
-                  <TableCell>{item.nama}</TableCell>
-                  <TableCell>{item.kategori?.nama || "-"}</TableCell>
-                  <TableCell>{item.satuan || "Pcs"}</TableCell>
-                  <TableCell className="text-right">
-                    {item.hargaBeli
-                      ? new Intl.NumberFormat("id-ID", {
-                          style: "currency",
-                          currency: "IDR",
-                        }).format(Number(item.hargaBeli))
-                      : "-"}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    {new Intl.NumberFormat("id-ID", {
-                      style: "currency",
-                      currency: "IDR",
-                    }).format(Number(item.hargaJual))}
-                  </TableCell>
-                  <TableCell className="text-right">{item.stok}</TableCell>
-                  <TableCell className="text-right">
-                    {item.stokMinimum || 0}
-                  </TableCell>
-                  <TableCell>{item.supplier?.nama || "-"}</TableCell>
-                  <TableCell>
-                    <div className="flex justify-end gap-2">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() =>
-                          router.push(`/inventory/items/${item.id}/edit`)
-                        }
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                      <AlertDialog
-                        open={itemToDelete === item.id}
-                        onOpenChange={(open) =>
-                          setItemToDelete(open ? item.id : null)
-                        }
-                      >
-                        <AlertDialogTrigger asChild>
-                          <Button variant="ghost" size="icon">
-                            <Trash className="h-4 w-4" />
-                          </Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                          <AlertDialogHeader>
-                            <AlertDialogTitle>
-                              Apakah anda yakin untuk menghapusnya?
-                            </AlertDialogTitle>
-                            <AlertDialogDescription>
-                              Tindakan ini tidak dapat dibatalkan. Tindakan ini
-                              akan menghapus item secara permanen dari database.
-                            </AlertDialogDescription>
-                          </AlertDialogHeader>
-                          <AlertDialogFooter>
-                            <AlertDialogCancel
-                              onClick={() => setItemToDelete(null)}
-                            >
-                              Batal
-                            </AlertDialogCancel>
-                            <Button
-                              variant="destructive"
-                              onClick={handleDeleteItem}
-                            >
-                              Hapus
+              table.getRowModel().rows.map((row) => {
+                const item = row.original;
+                return (
+                  <TableRow key={item.id}>
+                    <TableCell>{row.index + 1}</TableCell>
+                    <TableCell>
+                      <div className="flex items-center justify-start gap-2">
+                        <BarcodeGenerator
+                          value={generateBarcodeForItem(item)}
+                          width={1.5}
+                          height={30}
+                        />
+                        <span className="text-xs text-muted-foreground">
+                          {item.kodeBarcode || "-"}
+                        </span>
+                      </div>
+                    </TableCell>
+                    <TableCell>{item.nama}</TableCell>
+                    <TableCell>{item.kategori?.nama || "-"}</TableCell>
+                    <TableCell>{item.satuan || "Pcs"}</TableCell>
+                    <TableCell className="text-right">
+                      {item.hargaBeli
+                        ? new Intl.NumberFormat("id-ID", {
+                            style: "currency",
+                            currency: "IDR",
+                          }).format(Number(item.hargaBeli))
+                        : "-"}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {new Intl.NumberFormat("id-ID", {
+                        style: "currency",
+                        currency: "IDR",
+                      }).format(Number(item.hargaJual))}
+                    </TableCell>
+                    <TableCell className="text-right">{item.stok}</TableCell>
+                    <TableCell className="text-right">
+                      {item.stokMinimum || 0}
+                    </TableCell>
+                    <TableCell>{item.supplier?.nama || "-"}</TableCell>
+                    <TableCell>
+                      <div className="flex justify-end gap-2">
+                        <EditItemDialog
+                          item={item}
+                          kategoriData={kategoriData?.data}
+                          supplierData={supplierData?.data}
+                          onSuccess={() => {
+                            router.refresh();
+                          }}
+                        />
+                        <AlertDialog
+                          open={itemToDelete === item.id}
+                          onOpenChange={(open) =>
+                            setItemToDelete(open ? item.id : null)
+                          }
+                        >
+                          <AlertDialogTrigger asChild>
+                            <Button variant="ghost" size="icon">
+                              <Trash className="h-4 w-4" />
                             </Button>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>
+                                Apakah anda yakin untuk menghapusnya?
+                              </AlertDialogTitle>
+                              <AlertDialogDescription>
+                                Tindakan ini tidak dapat dibatalkan. Tindakan
+                                ini akan menghapus item secara permanen dari
+                                database.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel
+                                onClick={() => setItemToDelete(null)}
+                              >
+                                Batal
+                              </AlertDialogCancel>
+                              <Button
+                                variant="destructive"
+                                onClick={handleDeleteItem}
+                              >
+                                Hapus
+                              </Button>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
           </TableBody>
         </Table>
+
+        <div className="flex items-center justify-between px-4 py-4">
+          <div className="text-muted-foreground hidden flex-1 text-sm lg:flex">
+            {table.getFilteredSelectedRowModel().rows.length} of{" "}
+            {table.getFilteredRowModel().rows.length} row(s) selected.
+          </div>
+          <div className="flex w-full items-center gap-8 lg:w-fit">
+            <div className="hidden items-center gap-2 lg:flex">
+              <Label htmlFor="rows-per-page" className="text-sm font-medium">
+                Rows per page
+              </Label>
+              <Select
+                value={`${table.getState().pagination.pageSize}`}
+                onValueChange={(value) => {
+                  table.setPageSize(Number(value));
+                }}
+              >
+                <SelectTrigger size="sm" className="w-20" id="rows-per-page">
+                  <SelectValue
+                    placeholder={table.getState().pagination.pageSize}
+                  />
+                </SelectTrigger>
+                <SelectContent side="top">
+                  {[10, 20, 30, 40, 50].map((pageSize) => (
+                    <SelectItem key={pageSize} value={`${pageSize}`}>
+                      {pageSize}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex w-fit items-center justify-center text-sm font-medium">
+              Page {table.getState().pagination.pageIndex + 1} of{" "}
+              {table.getPageCount()}
+            </div>
+            <div className="ml-auto flex items-center gap-2 lg:ml-0">
+              <Button
+                variant="outline"
+                className="hidden h-8 w-8 p-0 lg:flex"
+                onClick={() => table.setPageIndex(0)}
+                disabled={!table.getCanPreviousPage()}
+              >
+                <span className="sr-only">Go to first page</span>
+                <IconChevronsLeft />
+              </Button>
+              <Button
+                variant="outline"
+                className="size-8"
+                size="icon"
+                onClick={() => table.previousPage()}
+                disabled={!table.getCanPreviousPage()}
+              >
+                <span className="sr-only">Go to previous page</span>
+                <IconChevronLeft />
+              </Button>
+              <Button
+                variant="outline"
+                className="size-8"
+                size="icon"
+                onClick={() => table.nextPage()}
+                disabled={!table.getCanNextPage()}
+              >
+                <span className="sr-only">Go to next page</span>
+                <IconChevronRight />
+              </Button>
+              <Button
+                variant="outline"
+                className="hidden size-8 lg:flex"
+                size="icon"
+                onClick={() => table.setPageIndex(table.getPageCount() - 1)}
+                disabled={!table.getCanNextPage()}
+              >
+                <span className="sr-only">Go to last page</span>
+                <IconChevronsRight />
+              </Button>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );

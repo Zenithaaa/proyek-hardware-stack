@@ -36,36 +36,51 @@ import {
   createItemSchema,
   type CreateItemPayload,
 } from "@/lib/schemas/item.schema";
-import { createItemAction } from "@/lib/actions/item.actions";
+import { updateItemAction } from "@/lib/actions/item.actions";
+import { Pencil } from "lucide-react";
 
-interface AddItemDialogProps {
+interface EditItemDialogProps {
+  item: {
+    id: number;
+    nama: string;
+    kategori?: { id: number; nama: string };
+    supplier?: { id: number; nama: string };
+    hargaJual: number;
+    hargaBeli?: number;
+    stok: number;
+    stokMinimum?: number;
+    kodeBarcode?: string;
+    satuan?: string;
+  };
   kategoriData?: Array<{ id: number; nama: string }>;
   supplierData?: Array<{ id: number; nama: string }>;
   onSuccess?: () => void;
 }
 
-export function AddItemDialog({
+export function EditItemDialog({
+  item,
   kategoriData = [],
   supplierData = [],
   onSuccess,
-}: AddItemDialogProps) {
+}: EditItemDialogProps) {
   const [open, setOpen] = React.useState(false);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
-  const [generatedBarcode, setGeneratedBarcode] = React.useState("");
+  const [generatedBarcode, setGeneratedBarcode] = React.useState(
+    item.kodeBarcode || ""
+  );
 
   const form = useForm<CreateItemPayload>({
     resolver: zodResolver(createItemSchema),
     defaultValues: {
-      nama: "",
-      kategoriId: null,
-      hargaJual: undefined,
-      hargaBeli: null,
-      stok: 0,
-      stokMinimum: null,
-      manufacture: null,
-      kodeBarcode: null,
-      supplierId: null,
-      satuan: "Pcs",
+      nama: item.nama,
+      kategoriId: item.kategori?.id || null,
+      hargaJual: item.hargaJual,
+      hargaBeli: item.hargaBeli || null,
+      stok: item.stok,
+      stokMinimum: item.stokMinimum || null,
+      kodeBarcode: item.kodeBarcode || null,
+      supplierId: item.supplier?.id || null,
+      satuan: item.satuan || "Pcs",
     },
   });
 
@@ -78,10 +93,9 @@ export function AddItemDialog({
   const onSubmit = async (data: CreateItemPayload) => {
     setIsSubmitting(true);
     try {
-      const result = await createItemAction(data);
+      const result = await updateItemAction(item.id, data);
       if (result.success) {
-        toast.success("Item berhasil ditambahkan");
-        form.reset();
+        toast.success("Item berhasil diperbarui");
         setOpen(false);
         onSuccess?.();
       } else {
@@ -93,10 +107,10 @@ export function AddItemDialog({
             });
           });
         }
-        toast.error(result.message || "Gagal menambahkan item");
+        toast.error(result.message || "Gagal memperbarui item");
       }
     } catch (error) {
-      toast.error("Terjadi kesalahan saat menambahkan item");
+      toast.error("Terjadi kesalahan saat memperbarui item");
     } finally {
       setIsSubmitting(false);
     }
@@ -105,13 +119,15 @@ export function AddItemDialog({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button>Tambah Barang</Button>
+        <Button variant="ghost" size="icon">
+          <Pencil className="h-4 w-4" />
+        </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-md mx-auto p-4 sm:p-6 md:p-8">
+      <DialogContent className="max-w-md w-[90vw] mx-auto p-4 sm:p-6 md:p-8">
         <DialogHeader>
-          <DialogTitle>Tambah Barang Baru</DialogTitle>
+          <DialogTitle>Edit Barang</DialogTitle>
           <DialogDescription>
-            Isi informasi barang yang akan ditambahkan ke inventaris.
+            Ubah informasi barang dalam inventaris.
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
@@ -130,7 +146,7 @@ export function AddItemDialog({
               )}
             />
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 overflow-auto max-h-[70vh]">
               <FormField
                 control={form.control}
                 name="kategoriId"
@@ -194,7 +210,7 @@ export function AddItemDialog({
               />
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 overflow-auto max-h-[70vh]">
               <FormField
                 control={form.control}
                 name="hargaBeli"
@@ -242,17 +258,17 @@ export function AddItemDialog({
               />
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 overflow-auto max-h-[70vh]">
               <FormField
                 control={form.control}
                 name="stok"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Stok Awal</FormLabel>
+                    <FormLabel>Stok</FormLabel>
                     <FormControl>
                       <Input
                         type="number"
-                        placeholder="Masukkan stok awal"
+                        placeholder="Masukkan jumlah stok"
                         {...field}
                         onChange={(e) =>
                           field.onChange(
@@ -288,6 +304,44 @@ export function AddItemDialog({
                   </FormItem>
                 )}
               />
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 overflow-auto max-h-[70vh]">
+              <FormField
+                control={form.control}
+                name="kodeBarcode"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Kode Barcode</FormLabel>
+                    <div className="flex gap-2">
+                      <FormControl>
+                        <Input
+                          placeholder="Masukkan kode barcode"
+                          {...field}
+                          value={field.value || ""}
+                        />
+                      </FormControl>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={handleGenerateBarcode}
+                      >
+                        Generate
+                      </Button>
+                    </div>
+                    {generatedBarcode && (
+                      <div className="mt-2">
+                        <BarcodeGenerator
+                          value={generatedBarcode}
+                          width={1.5}
+                          height={50}
+                        />
+                      </div>
+                    )}
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
 
               <FormField
                 control={form.control}
@@ -297,11 +351,8 @@ export function AddItemDialog({
                     <FormLabel>Satuan</FormLabel>
                     <FormControl>
                       <Input
-                        placeholder="Masukkan satuan"
+                        placeholder="Masukkan satuan (mis: Pcs)"
                         {...field}
-                        onChange={(e) =>
-                          field.onChange(e.target.value || "Pcs")
-                        }
                       />
                     </FormControl>
                     <FormMessage />
@@ -310,67 +361,7 @@ export function AddItemDialog({
               />
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="manufacture"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Manufacture</FormLabel>
-                    <FormControl>
-                      <Input
-                        placeholder="Masukkan manufacture"
-                        {...field}
-                        onChange={(e) => field.onChange(e.target.value || null)}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="kodeBarcode"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Kode Barcode</FormLabel>
-                    <div className="flex flex-col sm:flex-row gap-2 w-full">
-                      <FormControl>
-                        <Input
-                          placeholder="Masukkan kode barcode"
-                          {...field}
-                          value={field.value || ""}
-                          onChange={(e) =>
-                            field.onChange(e.target.value || null)
-                          }
-                          className="w-full"
-                        />
-                      </FormControl>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={handleGenerateBarcode}
-                        className="w-full sm:w-auto"
-                      >
-                        Generate
-                      </Button>
-                    </div>
-                    {(field.value || generatedBarcode) && (
-                      <div className="mt-2 flex justify-center">
-                        <BarcodeGenerator
-                          value={field.value || generatedBarcode}
-                          height={60}
-                        />
-                      </div>
-                    )}
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-
-            <div className="flex justify-end gap-2">
+            <div className="flex justify-end gap-4 pt-4">
               <Button
                 type="button"
                 variant="outline"

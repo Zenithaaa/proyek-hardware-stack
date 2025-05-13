@@ -134,7 +134,7 @@ export function ImportExportDialog({
           )}
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-md mx-auto p-4 sm:p-6 md:p-8">
+      <DialogContent className="max-w-md w-[90vw] mx-auto p-4 sm:p-6 md:p-8">
         <DialogHeader>
           <DialogTitle>
             {type === "import"
