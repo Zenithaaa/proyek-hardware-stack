@@ -123,7 +123,7 @@ export function EditItemDialog({
           <Pencil className="h-4 w-4" />
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-md w-[90vw] mx-auto p-4 sm:p-6 md:p-8">
+      <DialogContent className="max-w-md w-[90vw] mx-auto p-4 sm:p-6 md:p-8 overflow-y-auto max-h-[80vh]">
         <DialogHeader>
           <DialogTitle>Edit Barang</DialogTitle>
           <DialogDescription>
@@ -146,7 +146,7 @@ export function EditItemDialog({
               )}
             />
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 overflow-auto max-h-[70vh]">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 overflow-auto max-h-[70vh] w-full">
               <FormField
                 control={form.control}
                 name="kategoriId"
@@ -158,7 +158,7 @@ export function EditItemDialog({
                       value={field.value?.toString()}
                     >
                       <FormControl>
-                        <SelectTrigger>
+                        <SelectTrigger className="w-full">
                           <SelectValue placeholder="Pilih kategori" />
                         </SelectTrigger>
                       </FormControl>
@@ -189,7 +189,7 @@ export function EditItemDialog({
                       value={field.value?.toString()}
                     >
                       <FormControl>
-                        <SelectTrigger>
+                        <SelectTrigger className="w-full">
                           <SelectValue placeholder="Pilih supplier" />
                         </SelectTrigger>
                       </FormControl>
@@ -210,7 +210,7 @@ export function EditItemDialog({
               />
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 overflow-auto max-h-[70vh]">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 overflow-auto max-h-[70vh] w-full">
               <FormField
                 control={form.control}
                 name="hargaBeli"
@@ -258,7 +258,7 @@ export function EditItemDialog({
               />
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 overflow-auto max-h-[70vh]">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 overflow-auto max-h-[70vh] w-full">
               <FormField
                 control={form.control}
                 name="stok"
@@ -306,29 +306,21 @@ export function EditItemDialog({
               />
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 overflow-auto max-h-[70vh]">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 overflow-auto max-h-[70vh] w-full">
               <FormField
                 control={form.control}
                 name="kodeBarcode"
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Kode Barcode</FormLabel>
-                    <div className="flex gap-2">
-                      <FormControl>
-                        <Input
-                          placeholder="Masukkan kode barcode"
-                          {...field}
-                          value={field.value || ""}
-                        />
-                      </FormControl>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={handleGenerateBarcode}
-                      >
-                        Generate
-                      </Button>
-                    </div>
+                    <FormControl>
+                      <Input
+                        placeholder="Masukkan kode barcode"
+                        {...field}
+                        value={field.value || ""}
+                        readOnly
+                      />
+                    </FormControl>
                     {generatedBarcode && (
                       <div className="mt-2">
                         <BarcodeGenerator
@@ -351,8 +343,11 @@ export function EditItemDialog({
                     <FormLabel>Satuan</FormLabel>
                     <FormControl>
                       <Input
-                        placeholder="Masukkan satuan (mis: Pcs)"
+                        placeholder="Pcs"
                         {...field}
+                        value={field.value || "Pcs"}
+                        readOnly
+                        className="w-full"
                       />
                     </FormControl>
                     <FormMessage />

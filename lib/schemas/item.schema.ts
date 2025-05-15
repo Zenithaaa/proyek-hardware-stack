@@ -8,7 +8,7 @@ export const createItemSchema = z.object({
     if (val === undefined || val === null) return null;
     const num = Number(val);
     return isNaN(num) ? null : num;
-  }, z.number().int().positive().optional().nullable()),
+  }, z.number().int().positive("Kategori harus dipilih")),
   hargaJual: z.preprocess((val) => {
     if (typeof val === "string" && val.trim() === "") return undefined;
     if (val === undefined) return undefined;
@@ -20,7 +20,7 @@ export const createItemSchema = z.object({
     if (val === undefined || val === null) return null;
     const num = Number(val);
     return isNaN(num) ? null : num;
-  }, z.number().positive("Harga beli harus positif").optional().nullable()),
+  }, z.number().positive("Harga beli harus positif")),
   stok: z.preprocess((val) => {
     if (typeof val === "string" && val.trim() === "") return 0;
     if (val === undefined || val === null) return 0;

@@ -10,9 +10,10 @@ datasource db {
 }
 
 model Kategori {
-  id         Int      @id @default(autoincrement()) @map("IdKategori")
-  nama       String   @unique @map("NamaKategori") @db.VarChar(50)
-  items      Item[]
+  id          Int      @id @default(autoincrement()) @map("IdKategori")
+  nama        String   @unique @map("NamaKategori") @db.VarChar(50)
+  description String?  @map("DeskripsiKategori") @db.Text
+  items       Item[]
 
   @@map("tbl_kategori")
 }
@@ -29,6 +30,24 @@ model Supplier {
 
   @@map("tbl_supplier")
 }
+
+model SesiKasir {
+  id                    String    @id @default(cuid())
+  userId                String
+  // user                  User      @relation(fields: [userId], references: [id]) // Jika ada tabel User lokal
+  waktuBuka             DateTime  @default(now())
+  modalAwal             Decimal   @db.Decimal(12, 2)
+  waktuTutup            DateTime?
+  totalPenjualanSistem  Decimal?  @db.Decimal(14, 2)
+  totalUangFisik        Decimal?  @db.Decimal(14, 2)
+  selisih               Decimal?  @db.Decimal(12, 2)
+  catatanSesi           String?   @db.Text
+  transaksiPenjualan    TransaksiPenjualan[]
+
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+}
+
 model Item {
   id              Int       @id @default(autoincrement()) @map("ItemId")
   nama            String    @map("NamaItem") @db.VarChar(100)
@@ -67,30 +86,100 @@ model Pelanggan {
 }
 
 model TransaksiPenjualan {
-  id                    Int       @id @default(autoincrement()) @map("IdTransaksi")
-  nomorStruk           String    @unique @map("NomorStruk") @db.VarChar(50)
-  pelangganId          Int?      @map("IdPelanggan")
-  userId               Int       @map("IdUser")
-  tanggalTransaksi     DateTime  @default(now()) @map("TanggalWaktuTransaksi")
-  metodePembayaran     String    @map("MetodePembayaran") @db.VarChar(50)
-  subtotal             Decimal   @default(0.00) @map("SubtotalTransaksi") @db.Decimal(12, 2)
-  totalDiskon          Decimal?  @default(0.00) @map("TotalDiskon") @db.Decimal(12, 2)
-  totalPajak           Decimal?  @default(0.00) @map("TotalPajak") @db.Decimal(12, 2)
-  grandTotal          Decimal   @map("GrandTotal") @db.Decimal(12, 2)
-  jumlahBayar         Decimal?  @map("JumlahBayar") @db.Decimal(12, 2)
-  kembalian           Decimal?  @map("Kembalian") @db.Decimal(12, 2)
-  catatan             String?   @db.Text
-  pelanggan           Pelanggan? @relation(fields: [pelangganId], references: [id])
-  detailTransaksi     DetailTransaksiPenjualan[]
+  id                    String    @id @default(cuid())
+  nomorStruk            String    @unique
+  pelangganId           Int?
+  pelanggan             Pelanggan? @relation(fields: [pelangganId], references: [id])
+  userId                String    // Kasir - Clerk User ID
+  tanggalWaktuTransaksi DateTime  @default(now())
 
-  @@index([tanggalTransaksi], map: "idx_transaksi_tanggal")
-  @@index([nomorStruk], map: "idx_transaksi_nostruk")
-  @@map("tbl_transaksi_penjualan")
+  detailTransaksiPenjualan DetailTransaksiPenjualan[]
+
+  subtotalSebelumDiskonPajak Decimal @db.Decimal(12, 2) @default(0.00)
+  totalDiskonTransaksi  Decimal?  @db.Decimal(12, 2) @default(0.00)
+  totalPajak            Decimal?  @db.Decimal(12, 2) @default(0.00)
+  grandTotal            Decimal   @db.Decimal(12, 2)
+
+   // --- PENYESUAIAN UNTUK MIDTRANS ---
+  // Status pembayaran akan diupdate oleh webhook dari Midtrans
+  statusPembayaran    String    @default("PENDING_PAYMENT_GATEWAY")
+  // Contoh status: 'PENDING_PAYMENT_GATEWAY', 'PAID_VIA_MIDTRANS', 'FAILED_MIDTRANS', 'EXPIRED_MIDTRANS', 'REFUNDED_MIDTRANS'
+
+  // Status transaksi keseluruhan
+  statusTransaksi     String    @default("MENUNGGU_PEMBAYARAN_PG")
+  // Contoh status: 'PROSES', 'MENUNGGU_PEMBAYARAN_PG', 'TERTAHAN', 'SELESAI', 'DIBATALKAN'
+
+// ID Order/Transaksi dari sisi Payment Gateway untuk seluruh transaksi ini
+  paymentGatewayName    String?   // Misal: "Midtrans"
+  paymentGatewayOrderId String?   @unique // ID Order unik dari Midtrans untuk transaksi ini
+  // --- AKHIR PENYESUAIAN UNTUK MIDTRANS ---
+
+  // Info Pengantaran
+  perluDiantar        Boolean   @default(false)
+  alamatPengiriman    String?   @db.Text
+  kotaPengiriman      String?
+  kodePosPengiriman   String?
+  noTelpPenerima      String?
+  catatanPengiriman   String?   @db.Text
+  biayaPengiriman     Decimal?  @db.Decimal(10, 2) @default(0.00)
+
+  pembayaranTransaksi PembayaranTransaksi[] // Jika mendukung multi-payment attempt
+
+  sesiKasirId         String?
+  sesiKasir           SesiKasir? @relation(fields: [sesiKasirId], references: [id])
+
+  catatanTransaksi      String?   @db.Text
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+}
+
+model MidtransWebhookLog {
+  id                  String    @id @default(cuid())
+  receivedAt          DateTime  @default(now())
+  isVerified          Boolean   @default(false) // Apakah signature webhook berhasil diverifikasi
+  midtransOrderId     String?   // order_id dari Midtrans
+  midtransTransactionId String? // transaction_id dari Midtrans
+  transactionStatus   String?   // transaction_status dari Midtrans
+  paymentType         String?   // payment_type dari Midtrans
+  statusCode          String?   // status_code dari Midtrans (misal 200, 201, 407)
+  grossAmount         String?   // gross_amount dari Midtrans
+  requestBody         Json      // Seluruh body JSON dari webhook
+  processingStatus    String?   // Status pemrosesan di sisi Anda ('SUCCESS', 'ERROR_VERIFICATION', 'ERROR_PROCESSING')
+  errorMessage        String?   @db.Text // Pesan error jika ada masalah saat memproses webhook
+
+  @@index([midtransOrderId])
+  @@index([midtransTransactionId])
+}
+
+model PembayaranTransaksi {
+  id                  String    @id @default(cuid())
+  transaksiPenjualanId String
+  transaksiPenjualan  TransaksiPenjualan @relation(fields: [transaksiPenjualanId], references: [id])
+
+  // Akan diisi dari PG: e.g., 'CREDIT_CARD', 'GOPAY', 'QRIS', 'BANK_TRANSFER_BCA', 'TUNAI'
+  metodePembayaran    String
+  jumlahDibayar       Decimal   @db.Decimal(12, 2)
+
+    // --- PENYESUAIAN UNTUK MIDTRANS ---
+  // ID spesifik dari Midtrans untuk upaya/detail pembayaran ini (charge ID, dsb.)
+  paymentGatewayPaymentId String?   @unique
+  // Status spesifik untuk upaya pembayaran ini di Midtrans
+  statusDetailPembayaran String   @default("PENDING") // 'PENDING', 'SUCCESS', 'FAILURE', 'EXPIRED', 'CHALLENGE' (status dari Midtrans)
+  // (Opsional tapi direkomendasikan) Menyimpan sebagian atau seluruh respons JSON dari Midtrans
+  paymentGatewayResponseDetails Json?
+  // --- AKHIR PENYESUAIAN UNTUK MIDTRANS ---
+
+  waktuPembayaran     DateTime  @default(now()) // Waktu saat upaya pembayaran ini dicatat/diproses PG
+
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  @@index([transaksiPenjualanId])
 }
 
 model DetailTransaksiPenjualan {
   id                    Int       @id @default(autoincrement()) @map("IdDetailTransaksi")
-  transaksiId           Int       @map("IdTransaksi")
+  transaksiId           String    @map("IdTransaksi")
   itemId                Int       @map("ItemId")
   namaItemSaatTransaksi String    @map("NamaItemSaatTransaksi") @db.VarChar(100)
   jumlah                Int       @map("Jumlah")

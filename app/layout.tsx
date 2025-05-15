@@ -4,6 +4,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import { Toaster } from "sonner";
 import "./globals.css";
 import { Providers } from "./providers";
+import Script from "next/script";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -25,9 +26,23 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const midtransClientKey = process.env.NEXT_PUBLIC_MIDTRANS_CLIENT_KEY_SANDBOX; // atau production key
+  const midtransSnapUrl =
+    process.env.MIDTRANS_IS_PRODUCTION === "true"
+      ? "https://app.midtrans.com/snap/snap.js"
+      : "https://app.sandbox.midtrans.com/snap/snap.js";
+
   return (
     <ClerkProvider>
       <html lang="en">
+        <head>
+          {/* Midtrans Snap.js Script */}
+          <Script
+            src={midtransSnapUrl}
+            data-client-key={midtransClientKey}
+            strategy="beforeInteractive" // Muat sebelum halaman interaktif
+          />
+        </head>
         <body
           className={`${geistSans.variable} ${geistMono.variable} antialiased`}
         >

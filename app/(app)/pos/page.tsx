@@ -39,6 +39,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
+import { initiateMidtransPayment } from "@/lib/actions/payment.actions";
 
 interface Product {
   id: string;
@@ -123,6 +124,104 @@ export default function POSPage() {
       currentCart.filter((item) => item.id !== productId)
     );
   };
+
+  // ... state untuk order, items, grandTotal, dll. ...
+  // Misal Anda punya idTransaksiInternal dari pembuatan order di DB Anda
+
+  const { toast } = useToast();
+  const [isProcessingPayment, setIsProcessingPayment] = useState(false);
+
+  const handlePayWithMidtrans = async () => {
+    setIsProcessingPayment(true);
+    // Siapkan data order untuk dikirim ke Server Action
+    const orderDataForMidtrans = {
+      idTransaksiInternal: currentTransactionId, // ID unik transaksi dari sistem Anda
+      grandTotal: currentGrandTotal,
+      items: currentCartItems.map((item) => ({
+        id: item.productId, // ID produk di sistem Anda
+        price: item.price,
+        quantity: item.quantity,
+        name: item.productName,
+      })),
+      customer: selectedCustomer
+        ? {
+            // Ambil dari state pelanggan Anda
+            first_name: selectedCustomer.name.split(" ")[0],
+            last_name: selectedCustomer.name.split(" ").slice(1).join(" "),
+            email: selectedCustomer.email,
+            phone: selectedCustomer.phone,
+          }
+        : undefined,
+      // Anda bisa membatasi metode pembayaran yang muncul di Snap
+      enabledPayments: [
+        "credit_card",
+        "gopay",
+        "shopeepay",
+        "qris",
+        "bca_va",
+        "bni_va",
+        "bri_va",
+      ],
+    };
+
+    const result = await initiateMidtransPayment(orderDataForMidtrans);
+
+    if (result.success && result.token) {
+      // @ts-ignore // Memberitahu TypeScript bahwa window.snap ada
+      window.snap.pay(result.token, {
+        onSuccess: function (midtransResult: any) {
+          /* Kasir/Pelanggan berhasil berinteraksi dengan Snap & Midtrans menerima pembayaran awal. */
+          /* JANGAN anggap transaksi lunas di sini. Tunggu webhook! */
+          console.log("Midtrans onSuccess:", midtransResult);
+          toast({
+            title: "Pembayaran Diproses",
+            description: `Status: ${midtransResult.transaction_status}. Menunggu konfirmasi akhir.`,
+          });
+          // Anda bisa redirect ke halaman status order atau update UI
+          // Contoh: router.push(`/order/${result.midtransOrderId}/status`);
+          // Update status transaksi di UI POS Anda menjadi "Menunggu Konfirmasi"
+        },
+        onPending: function (midtransResult: any) {
+          /* Pembayaran pending (misal, bayar via VA dan belum dibayar). */
+          console.log("Midtrans onPending:", midtransResult);
+          toast({
+            title: "Pembayaran Pending",
+            description: `Order ID: ${midtransResult.order_id}. Silakan selesaikan pembayaran.`,
+          });
+          // Tampilkan instruksi pembayaran atau redirect
+        },
+        onError: function (midtransResult: any) {
+          /* Terjadi error saat proses pembayaran di Snap. */
+          console.error("Midtrans onError:", midtransResult);
+          toast({
+            variant: "destructive",
+            title: "Pembayaran Gagal",
+            description: midtransResult.status_message || "Silakan coba lagi.",
+          });
+        },
+        onClose: function () {
+          /* Pelanggan menutup popup Snap tanpa menyelesaikan pembayaran. */
+          console.log("Midtrans Snap closed");
+          toast({
+            title: "Pembayaran Dibatalkan",
+            description: "Anda menutup jendela pembayaran.",
+          });
+        },
+      });
+    } else {
+      toast({
+        variant: "destructive",
+        title: "Gagal Memulai Pembayaran",
+        description: result.error || "Terjadi kesalahan.",
+      });
+    }
+    setIsProcessingPayment(false);
+  };
+
+  // ... JSX Anda dengan tombol untuk memanggil handlePayWithMidtrans ...
+  // <Button onClick={handlePayWithMidtrans} disabled={isProcessingPayment}>
+  //   {isProcessingPayment ? "Memproses..." : "Bayar via Midtrans"}
+  // </Button>
 
   return (
     <div className="flex h-[calc(100vh-4rem)] gap-4 p-6">

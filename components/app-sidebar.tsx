@@ -65,7 +65,7 @@ const data = {
         },
         {
           title: "Kategori Barang",
-          url: "#",
+          url: "/inventory/category",
         },
         {
           title: "Penyesuaian Stok",
@@ -79,7 +79,7 @@ const data = {
       icon: Users,
       items: [
         {
-          title: "Daftar Transaksi",
+          title: "Daftar Supplier",
           url: "#",
         },
         {

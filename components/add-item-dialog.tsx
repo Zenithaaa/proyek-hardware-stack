@@ -107,7 +107,7 @@ export function AddItemDialog({
       <DialogTrigger asChild>
         <Button>Tambah Barang</Button>
       </DialogTrigger>
-      <DialogContent className="max-w-md mx-auto p-4 sm:p-6 md:p-8">
+      <DialogContent className="max-w-md mx-auto p-4 sm:p-6 md:p-8 max-h-[80vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Tambah Barang Baru</DialogTitle>
           <DialogDescription>
@@ -123,14 +123,18 @@ export function AddItemDialog({
                 <FormItem>
                   <FormLabel>Nama Barang</FormLabel>
                   <FormControl>
-                    <Input placeholder="Masukkan nama barang" {...field} />
+                    <Input
+                      placeholder="Masukkan nama barang"
+                      {...field}
+                      value={field.value ?? ""}
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
             />
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 gap-4">
               <FormField
                 control={form.control}
                 name="kategoriId"
@@ -138,15 +142,14 @@ export function AddItemDialog({
                   <FormItem>
                     <FormLabel>Kategori</FormLabel>
                     <Select
-                      onValueChange={(value) => field.onChange(Number(value))}
-                      value={field.value?.toString()}
+                      onValueChange={field.onChange}
+                      value={field.value ?? ""}
                     >
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Pilih kategori" />
-                        </SelectTrigger>
-                      </FormControl>
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Pilih kategori" />
+                      </SelectTrigger>
                       <SelectContent>
+                        <SelectItem value="all">Pilih kategori</SelectItem>
                         {kategoriData.map((kategori) => (
                           <SelectItem
                             key={kategori.id}
@@ -157,7 +160,6 @@ export function AddItemDialog({
                         ))}
                       </SelectContent>
                     </Select>
-                    <FormMessage />
                   </FormItem>
                 )}
               />
@@ -169,15 +171,14 @@ export function AddItemDialog({
                   <FormItem>
                     <FormLabel>Supplier</FormLabel>
                     <Select
-                      onValueChange={(value) => field.onChange(Number(value))}
-                      value={field.value?.toString()}
+                      onValueChange={field.onChange}
+                      value={field.value ?? ""}
                     >
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Pilih supplier" />
-                        </SelectTrigger>
-                      </FormControl>
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Pilih supplier" />
+                      </SelectTrigger>
                       <SelectContent>
+                        <SelectItem value="all">Pilih supplier</SelectItem>
                         {supplierData.map((supplier) => (
                           <SelectItem
                             key={supplier.id}
@@ -188,7 +189,6 @@ export function AddItemDialog({
                         ))}
                       </SelectContent>
                     </Select>
-                    <FormMessage />
                   </FormItem>
                 )}
               />
@@ -201,19 +201,11 @@ export function AddItemDialog({
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Harga Beli</FormLabel>
-                    <FormControl>
-                      <Input
-                        type="number"
-                        placeholder="Masukkan harga beli"
-                        {...field}
-                        onChange={(e) =>
-                          field.onChange(
-                            e.target.value ? Number(e.target.value) : null
-                          )
-                        }
-                      />
-                    </FormControl>
-                    <FormMessage />
+                    <Input
+                      type="number"
+                      placeholder="Masukkan harga beli"
+                      {...field}
+                    />
                   </FormItem>
                 )}
               />
@@ -224,19 +216,11 @@ export function AddItemDialog({
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Harga Jual</FormLabel>
-                    <FormControl>
-                      <Input
-                        type="number"
-                        placeholder="Masukkan harga jual"
-                        {...field}
-                        onChange={(e) =>
-                          field.onChange(
-                            e.target.value ? Number(e.target.value) : undefined
-                          )
-                        }
-                      />
-                    </FormControl>
-                    <FormMessage />
+                    <Input
+                      type="number"
+                      placeholder="Masukkan harga jual"
+                      {...field}
+                    />
                   </FormItem>
                 )}
               />
@@ -295,16 +279,7 @@ export function AddItemDialog({
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Satuan</FormLabel>
-                    <FormControl>
-                      <Input
-                        placeholder="Masukkan satuan"
-                        {...field}
-                        onChange={(e) =>
-                          field.onChange(e.target.value || "Pcs")
-                        }
-                      />
-                    </FormControl>
-                    <FormMessage />
+                    <Input placeholder="Masukkan satuan" {...field} readOnly />
                   </FormItem>
                 )}
               />
@@ -340,7 +315,7 @@ export function AddItemDialog({
                         <Input
                           placeholder="Masukkan kode barcode"
                           {...field}
-                          value={field.value || ""}
+                          value={field.value ?? ""}
                           onChange={(e) =>
                             field.onChange(e.target.value || null)
                           }
@@ -357,11 +332,17 @@ export function AddItemDialog({
                       </Button>
                     </div>
                     {(field.value || generatedBarcode) && (
-                      <div className="mt-2 flex justify-center">
-                        <BarcodeGenerator
-                          value={field.value || generatedBarcode}
-                          height={60}
-                        />
+                      <div className="mt-2 w-full overflow-hidden flex justify-center">
+                        <div className="w-full max-w-xs mx-auto">
+                          <BarcodeGenerator
+                            value={field.value || generatedBarcode}
+                            width={1.5}
+                            height={50}
+                          />
+                          <div className="text-center text-xs mt-1">
+                            {field.value || generatedBarcode}
+                          </div>
+                        </div>
                       </div>
                     )}
                     <FormMessage />
