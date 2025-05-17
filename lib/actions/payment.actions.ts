@@ -64,11 +64,19 @@ export async function initiateMidtransPayment({
         name: item.name.substring(0, 50), // Nama item maks 50 karakter
       })),
       customer_details: customer,
-      enabled_payments: enabledPayments, // Contoh: ['credit_card', 'gopay', 'shopeepay', 'qris']
-      // Tambahkan callback URL jika perlu (biasanya tidak perlu jika Anda hanya mengandalkan Snap.js callbacks & webhook)
-      // callbacks: {
-      //   finish: `<span class="math-inline">\{process\.env\.NEXT\_PUBLIC\_BASE\_URL\}/order/</span>{idTransaksiInternal}/status` // URL redirect setelah pembayaran
-      // }
+      enabled_payments: enabledPayments, // Contoh: ['credit_card', 'gopay', 'shopeepay', 'qris'],
+      // Tambahkan callback URL untuk mengarahkan pengguna kembali ke aplikasi setelah pembayaran
+      callbacks: {
+        finish: `${
+          process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000"
+        }/pos`, // URL redirect setelah pembayaran selesai
+        error: `${
+          process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000"
+        }/pos`, // URL redirect jika terjadi error
+        pending: `${
+          process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000"
+        }/pos`, // URL redirect jika pembayaran pending
+      },
     };
 
     // 3. Panggil Midtrans API untuk mendapatkan token Snap

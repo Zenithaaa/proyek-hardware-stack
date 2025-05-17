@@ -8,10 +8,9 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { prisma } from "@/lib/db";
-import { IconTrendingUp, IconTrendingDown } from "@tabler/icons-react"; // Using lucide-react
+import { IconTrendingUp, IconTrendingDown } from "@tabler/icons-react";
 import { startOfMonth, endOfMonth, subMonths } from "date-fns";
 
-// Helper to format currency to IDR
 const formatCurrency = (amount: number | bigint | null | undefined) => {
   if (amount === null || amount === undefined) {
     amount = 0;
@@ -25,7 +24,6 @@ const formatCurrency = (amount: number | bigint | null | undefined) => {
   }).format(numericAmount);
 };
 
-// Helper to format percentage
 const formatPercentage = (value: number | null | undefined) => {
   if (
     value === null ||
@@ -39,13 +37,12 @@ const formatPercentage = (value: number | null | undefined) => {
   return `${fixedValue >= 0 ? "+" : ""}${fixedValue.toFixed(1)}%`;
 };
 
-// Helper to calculate percentage change
 const calculatePercentageChange = (current: number, previous: number) => {
   if (previous === 0) {
-    return current > 0 ? 100 : 0; // If previous was 0, any increase is 100% (or 0 if current is also 0)
+    return current > 0 ? 100 : 0;
   }
   const change = ((current - previous) / previous) * 100;
-  return parseFloat(change.toFixed(1)); // Return a number, formatting is separate
+  return parseFloat(change.toFixed(1));
 };
 
 const now = new Date();
@@ -61,7 +58,7 @@ export default async function SectionCards() {
       prisma.transaksiPenjualan.aggregate({
         _sum: { grandTotal: true },
         where: {
-          tanggalTransaksi: {
+          tanggalWaktuTransaksi: {
             gte: firstDayCurrentMonth,
             lte: lastDayCurrentMonth,
           },
@@ -70,7 +67,7 @@ export default async function SectionCards() {
       prisma.transaksiPenjualan.aggregate({
         _sum: { grandTotal: true },
         where: {
-          tanggalTransaksi: {
+          tanggalWaktuTransaksi: {
             gte: firstDayPreviousMonth,
             lte: lastDayPreviousMonth,
           },
@@ -125,7 +122,7 @@ export default async function SectionCards() {
   const [salesCurrentMonthData, salesPreviousMonthData] = await Promise.all([
     prisma.transaksiPenjualan.count({
       where: {
-        tanggalTransaksi: {
+        tanggalWaktuTransaksi: {
           gte: firstDayCurrentMonth,
           lte: lastDayCurrentMonth,
         },
@@ -133,7 +130,7 @@ export default async function SectionCards() {
     }),
     prisma.transaksiPenjualan.count({
       where: {
-        tanggalTransaksi: {
+        tanggalWaktuTransaksi: {
           gte: firstDayPreviousMonth,
           lte: lastDayPreviousMonth,
         },
@@ -147,28 +144,24 @@ export default async function SectionCards() {
     totalSalesPreviousMonth
   );
 
-  // 4. Total Supplier (NOW WITH ACCURATE MONTHLY TREND using createdAt)
+  // 4. Total Supplier
   const [
     totalSuppliersData,
     suppliersAddedCurrentMonthData,
     suppliersAddedPreviousMonthData,
   ] = await Promise.all([
-    prisma.supplier.count(), // Total number of suppliers
+    prisma.supplier.count(),
     prisma.supplier.count({
-      // Suppliers added this month
       where: {
         createdAt: {
-          // Using the createdAt field (ensure Prisma client is updated)
           gte: firstDayCurrentMonth,
           lte: lastDayCurrentMonth,
         },
       },
     }),
     prisma.supplier.count({
-      // Suppliers added last month
       where: {
         createdAt: {
-          // Using the createdAt field (ensure Prisma client is updated)
           gte: firstDayPreviousMonth,
           lte: lastDayPreviousMonth,
         },
@@ -204,19 +197,8 @@ export default async function SectionCards() {
             </Badge>
           </CardAction>
         </CardHeader>
-        <CardFooter className="flex-col items-start gap-1.5 text-sm">
-          <div className="line-clamp-1 flex gap-2 font-medium items-center">
-            {revenuePercentageChange >= 0 ? "Trending up" : "Trending down"}{" "}
-            this month
-            {revenuePercentageChange >= 0 ? (
-              <IconTrendingUp className="size-4" />
-            ) : (
-              <IconTrendingDown className="size-4" />
-            )}
-          </div>
-          <div className="text-muted-foreground">
-            Pendapatan 1 bulan terakhir
-          </div>
+        <CardFooter className="text-sm text-muted-foreground">
+          vs. bulan lalu
         </CardFooter>
       </Card>
 
@@ -225,7 +207,7 @@ export default async function SectionCards() {
         <CardHeader>
           <CardDescription>Total Pelanggan</CardDescription>
           <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
-            {totalPelanggan.toLocaleString("id-ID")}
+            {totalPelanggan}
           </CardTitle>
           <CardAction>
             <Badge variant="outline" className="flex items-center">
@@ -238,19 +220,8 @@ export default async function SectionCards() {
             </Badge>
           </CardAction>
         </CardHeader>
-        <CardFooter className="flex-col items-start gap-1.5 text-sm">
-          <div className="line-clamp-1 flex gap-2 font-medium items-center">
-            {customerPercentageChange >= 0 ? "Trending up" : "Trending down"}{" "}
-            this month
-            {customerPercentageChange >= 0 ? (
-              <IconTrendingUp className="size-4" />
-            ) : (
-              <IconTrendingDown className="size-4" />
-            )}
-          </div>
-          <div className="text-muted-foreground">
-            Pelanggan baru 1 bulan terakhir
-          </div>
+        <CardFooter className="text-sm text-muted-foreground">
+          {newCustomersCurrentMonth} pelanggan baru bulan ini
         </CardFooter>
       </Card>
 
@@ -259,7 +230,7 @@ export default async function SectionCards() {
         <CardHeader>
           <CardDescription>Total Penjualan</CardDescription>
           <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
-            {totalSalesCurrentMonth.toLocaleString("id-ID")}
+            {totalSalesCurrentMonth}
           </CardTitle>
           <CardAction>
             <Badge variant="outline" className="flex items-center">
@@ -272,28 +243,17 @@ export default async function SectionCards() {
             </Badge>
           </CardAction>
         </CardHeader>
-        <CardFooter className="flex-col items-start gap-1.5 text-sm">
-          <div className="line-clamp-1 flex gap-2 font-medium items-center">
-            {salesPercentageChange >= 0 ? "Trending up" : "Trending down"} this
-            month
-            {salesPercentageChange >= 0 ? (
-              <IconTrendingUp className="size-4" />
-            ) : (
-              <IconTrendingDown className="size-4" />
-            )}
-          </div>
-          <div className="text-muted-foreground">
-            Penjualan 1 bulan terakhir
-          </div>
+        <CardFooter className="text-sm text-muted-foreground">
+          vs. bulan lalu
         </CardFooter>
       </Card>
 
-      {/* Card Total Supplier (with accurate monthly trend) */}
+      {/* Card Total Supplier */}
       <Card className="@container/card">
         <CardHeader>
           <CardDescription>Total Supplier</CardDescription>
           <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
-            {totalSuppliers.toLocaleString("id-ID")}
+            {totalSuppliers}
           </CardTitle>
           <CardAction>
             <Badge variant="outline" className="flex items-center">
@@ -306,19 +266,8 @@ export default async function SectionCards() {
             </Badge>
           </CardAction>
         </CardHeader>
-        <CardFooter className="flex-col items-start gap-1.5 text-sm">
-          <div className="line-clamp-1 flex gap-2 font-medium items-center">
-            {supplierPercentageChange >= 0 ? "Trending up" : "Trending down"}{" "}
-            this month
-            {supplierPercentageChange >= 0 ? (
-              <IconTrendingUp className="size-4" />
-            ) : (
-              <IconTrendingDown className="size-4" />
-            )}
-          </div>
-          <div className="text-muted-foreground">
-            Supplier baru 1 bulan terakhir
-          </div>
+        <CardFooter className="text-sm text-muted-foreground">
+          {newSuppliersCurrentMonth} supplier baru bulan ini
         </CardFooter>
       </Card>
     </div>

@@ -50,7 +50,7 @@ const data = {
       items: [
         {
           title: "Daftar Transaksi",
-          url: "#",
+          url: "/sales/transactions",
         },
       ],
     },

@@ -95,10 +95,10 @@ model TransaksiPenjualan {
 
   detailTransaksiPenjualan DetailTransaksiPenjualan[]
 
-  subtotalSebelumDiskonPajak Decimal @db.Decimal(12, 2) @default(0.00)
-  totalDiskonTransaksi  Decimal?  @db.Decimal(12, 2) @default(0.00)
-  totalPajak            Decimal?  @db.Decimal(12, 2) @default(0.00)
-  grandTotal            Decimal   @db.Decimal(12, 2)
+  subtotalSebelumDiskonPajak Decimal @db.Decimal(15, 2) @default(0.00)
+  totalDiskonTransaksi  Decimal?  @db.Decimal(15, 2) @default(0.00)
+  totalPajak            Decimal?  @db.Decimal(15, 2) @default(0.00)
+  grandTotal            Decimal   @db.Decimal(15, 2)
 
    // --- PENYESUAIAN UNTUK MIDTRANS ---
   // Status pembayaran akan diupdate oleh webhook dari Midtrans
@@ -158,13 +158,17 @@ model PembayaranTransaksi {
 
   // Akan diisi dari PG: e.g., 'CREDIT_CARD', 'GOPAY', 'QRIS', 'BANK_TRANSFER_BCA', 'TUNAI'
   metodePembayaran    String
-  jumlahDibayar       Decimal   @db.Decimal(12, 2)
+  jumlahDibayar       Decimal   @db.Decimal(15, 2)
 
-    // --- PENYESUAIAN UNTUK MIDTRANS ---
+  // --- PENYESUAIAN UNTUK MIDTRANS ---
   // ID spesifik dari Midtrans untuk upaya/detail pembayaran ini (charge ID, dsb.)
   paymentGatewayPaymentId String?   @unique
   // Status spesifik untuk upaya pembayaran ini di Midtrans
   statusDetailPembayaran String   @default("PENDING") // 'PENDING', 'SUCCESS', 'FAILURE', 'EXPIRED', 'CHALLENGE' (status dari Midtrans)
+  // Data tambahan dari Midtrans
+  transactionType     String   @default("Payment") // Tipe transaksi dari Midtrans (Payment, Refund, etc)
+  channel             String?   // Channel pembayaran (DANA, GOPAY, etc)
+  amount              Decimal?  @db.Decimal(15, 2) // Jumlah pembayaran dari Midtrans
   // (Opsional tapi direkomendasikan) Menyimpan sebagian atau seluruh respons JSON dari Midtrans
   paymentGatewayResponseDetails Json?
   // --- AKHIR PENYESUAIAN UNTUK MIDTRANS ---
