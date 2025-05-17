@@ -2,13 +2,17 @@
 
 import * as React from "react";
 import {
+  ArrowRightLeft,
   BookOpen,
+  FileText,
   Frame,
   GalleryVerticalEnd,
   LayoutDashboard,
   Map,
+  Package,
   PieChart,
   Settings2,
+  User,
   Users,
 } from "lucide-react";
 
@@ -24,6 +28,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
+import { IconReport } from "@tabler/icons-react";
 
 const data = {
   navMain: [
@@ -35,7 +40,7 @@ const data = {
     {
       title: "Point of Sale",
       url: "#",
-      icon: Users,
+      icon: ArrowRightLeft,
       items: [
         {
           title: "Mulai Transaksi Baru",
@@ -46,7 +51,7 @@ const data = {
     {
       title: "Penjualan",
       url: "#",
-      icon: Users,
+      icon: FileText,
       items: [
         {
           title: "Daftar Transaksi",
@@ -76,7 +81,7 @@ const data = {
     {
       title: "Pembelian",
       url: "#",
-      icon: Users,
+      icon: Package,
       items: [
         {
           title: "Daftar Supplier",
@@ -95,7 +100,7 @@ const data = {
     {
       title: "Pelanggan",
       url: "#",
-      icon: Settings2,
+      icon: User,
       items: [
         {
           title: "Daftar Pelanggan",
@@ -106,7 +111,7 @@ const data = {
     {
       title: "Laporan",
       url: "#",
-      icon: Settings2,
+      icon: IconReport,
       items: [
         {
           title: "Laporan Penjualan",

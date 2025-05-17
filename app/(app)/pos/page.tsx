@@ -146,50 +146,98 @@ export default function POSPage() {
   });
 
   useEffect(() => {
-    // Buat sesi kasir di database saat komponen dimuat
-    const createCashierSession = async () => {
+    // Coba memuat data dari localStorage saat komponen dimuat
+    const loadSavedState = () => {
       try {
-        if (user?.id) {
-          const response = await fetch("/api/cashier-sessions", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              userId: user.id,
-              modalAwal: 0, // Nilai default
-              catatanSesi: "Sesi dibuat otomatis",
-            }),
-          });
+        const savedCart = localStorage.getItem("pos_cart");
+        const savedCustomer = localStorage.getItem("pos_customer");
+        const savedDelivery = localStorage.getItem("pos_delivery");
+        const savedPayments = localStorage.getItem("pos_payments");
+        const savedSessionId = localStorage.getItem("pos_session_id");
+        const savedTransactionId = localStorage.getItem("pos_transaction_id");
 
-          const result = await response.json();
-          if (response.ok) {
-            setSessionId(result.data.id);
-            toast.success("Sesi kasir berhasil dibuat");
-          } else {
-            toast.error("Gagal membuat sesi kasir: " + result.error);
-            // Fallback ke ID sementara jika gagal
-            setSessionId(`SESSION_${Date.now()}`);
-          }
-        } else {
-          // Fallback jika user belum tersedia
-          setSessionId(`SESSION_${Date.now()}`);
+        if (savedCart) setCart(JSON.parse(savedCart));
+        if (savedCustomer) setSelectedCustomer(JSON.parse(savedCustomer));
+        if (savedDelivery) {
+          const deliveryData = JSON.parse(savedDelivery);
+          setNeedDelivery(deliveryData.needDelivery);
+          setDeliveryAddress(deliveryData.address);
+          setDeliveryCity(deliveryData.city);
+          setDeliveryPostalCode(deliveryData.postalCode);
+          setDeliveryRecipientPhone(deliveryData.recipientPhone);
+          setDeliveryNote(deliveryData.note);
+          setDeliveryFee(deliveryData.fee);
         }
-        generateNewTransactionId();
+        if (savedPayments) setPayments(JSON.parse(savedPayments));
+        if (savedSessionId) setSessionId(savedSessionId);
+        if (savedTransactionId) {
+          setTransactionId(savedTransactionId);
+        } else {
+          generateNewTransactionId();
+        }
       } catch (error) {
-        console.error("Error creating cashier session:", error);
-        toast.error("Gagal membuat sesi kasir");
-        // Fallback ke ID sementara jika gagal
-        setSessionId(`SESSION_${Date.now()}`);
+        console.error("Error loading saved state:", error);
+        // Jika terjadi error saat memuat data, generate ID transaksi baru
         generateNewTransactionId();
+
+        // Jika ada data di cart, simpan ke transaksi tertahan
+        if (cart.length > 0) {
+          holdTransaction();
+        }
       }
     };
 
-    createCashierSession();
-  }, [user?.id]);
+    loadSavedState();
+  }, []);
 
-  const generateNewTransactionId = () => {
-    const newTransactionId = `TRX_${Date.now()}`;
-    setTransactionId(newTransactionId);
+  const generateNewTransactionId = async () => {
+    try {
+      if (user?.id) {
+        const response = await fetch("/api/cashier-sessions", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            userId: user.id,
+            modalAwal: 0,
+            catatanSesi: "Sesi dibuat saat memulai transaksi baru",
+          }),
+        });
+
+        const result = await response.json();
+        if (response.ok) {
+          setSessionId(result.data.id);
+          const newTransactionId = `TRX_${Date.now()}`;
+          setTransactionId(newTransactionId);
+          toast.success("Sesi kasir berhasil dibuat");
+        } else {
+          toast.error("Gagal membuat sesi kasir: " + result.error);
+        }
+      } else {
+        toast.error("User ID tidak tersedia");
+      }
+    } catch (error) {
+      console.error("Error creating cashier session:", error);
+      toast.error("Gagal membuat sesi kasir");
+    }
   };
+
+  // Efek untuk menyimpan perubahan state ke localStorage
+  useEffect(() => {
+    saveStateToLocalStorage();
+  }, [
+    cart,
+    selectedCustomer,
+    needDelivery,
+    deliveryAddress,
+    deliveryCity,
+    deliveryPostalCode,
+    deliveryRecipientPhone,
+    deliveryNote,
+    deliveryFee,
+    payments,
+    sessionId,
+    transactionId,
+  ]);
 
   // Fungsi untuk menghitung total belanja
   const calculateTotal = () => {
@@ -312,6 +360,31 @@ export default function POSPage() {
     toast.success("Barang dihapus dari keranjang");
   };
 
+  // Fungsi untuk menyimpan state ke localStorage
+  const saveStateToLocalStorage = () => {
+    try {
+      localStorage.setItem("pos_cart", JSON.stringify(cart));
+      localStorage.setItem("pos_customer", JSON.stringify(selectedCustomer));
+      localStorage.setItem(
+        "pos_delivery",
+        JSON.stringify({
+          needDelivery,
+          address: deliveryAddress,
+          city: deliveryCity,
+          postalCode: deliveryPostalCode,
+          recipientPhone: deliveryRecipientPhone,
+          note: deliveryNote,
+          fee: deliveryFee,
+        })
+      );
+      localStorage.setItem("pos_payments", JSON.stringify(payments));
+      localStorage.setItem("pos_session_id", sessionId);
+      localStorage.setItem("pos_transaction_id", transactionId);
+    } catch (error) {
+      console.error("Error saving state:", error);
+    }
+  };
+
   // Fungsi untuk menahan transaksi
   const holdTransaction = () => {
     if (cart.length === 0) {
@@ -333,6 +406,11 @@ export default function POSPage() {
         deliveryFee,
       },
     ]);
+    // Hapus data dari localStorage saat transaksi ditahan
+    localStorage.removeItem("pos_cart");
+    localStorage.removeItem("pos_customer");
+    localStorage.removeItem("pos_delivery");
+    localStorage.removeItem("pos_payments");
     setCart([]);
     setSelectedCustomer(null);
     setNeedDelivery(false);
@@ -366,11 +444,45 @@ export default function POSPage() {
   };
 
   // Handler untuk menambah metode pembayaran
-  const handleAddPayment = () => {
+  const handleAddPayment = async () => {
     if (payments.length >= 2) {
       toast.error("Maksimal 2 metode pembayaran");
       return;
     }
+
+    // Buat sesi kasir jika belum ada
+    if (!sessionId || sessionId.startsWith("SESSION_")) {
+      try {
+        if (user?.id) {
+          const response = await fetch("/api/cashier-sessions", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              userId: user.id,
+              modalAwal: 0,
+              catatanSesi: "Sesi dibuat saat memulai transaksi baru",
+            }),
+          });
+
+          const result = await response.json();
+          if (response.ok) {
+            setSessionId(result.data.id);
+            toast.success("Sesi kasir berhasil dibuat");
+          } else {
+            toast.error("Gagal membuat sesi kasir: " + result.error);
+            return;
+          }
+        } else {
+          toast.error("User ID tidak tersedia");
+          return;
+        }
+      } catch (error) {
+        console.error("Error creating cashier session:", error);
+        toast.error("Gagal membuat sesi kasir");
+        return;
+      }
+    }
+
     setPayments([
       ...payments,
       { method: "CASH", amount: 0, status: "PENDING" },
@@ -462,8 +574,11 @@ export default function POSPage() {
     }
   };
 
-  // Handler untuk pembayaran Midtrans
+  // Handler untuk pembayaran Midtrans (dinonaktifkan)
   const handleMidtransPayment = async (method: PaymentMethod) => {
+    toast.info("Pembayaran " + method + " akan segera hadir!");
+    return;
+    // Kode di bawah ini dinonaktifkan sementara
     setIsProcessingPayment(true);
     try {
       // Verifikasi sesi kasir terlebih dahulu
@@ -705,8 +820,8 @@ export default function POSPage() {
             <div>
               <CardTitle>Point of Sale</CardTitle>
               <CardDescription>
-                Kasir: {user?.fullName || "Loading..."} | Sesi: {sessionId} |
-                {format(new Date(), "PPpp", { locale: id })}
+                Sesi: {sessionId ? `#${sessionId}` : "-"} |{" "}
+                {format(new Date(), "dd MMMM yyyy, HH.mm", { locale: id })}
               </CardDescription>
             </div>
             <div className="flex gap-2">
@@ -753,6 +868,7 @@ export default function POSPage() {
                               {new Intl.NumberFormat("id-ID", {
                                 style: "currency",
                                 currency: "IDR",
+                                maximumFractionDigits: 0,
                               }).format(
                                 transaction.cart.reduce(
                                   (acc, item) => acc + item.subtotal,
@@ -1187,9 +1303,24 @@ export default function POSPage() {
           <Tabs defaultValue="cash" className="w-full">
             <TabsList className="grid w-full grid-cols-4">
               <TabsTrigger value="cash">Tunai</TabsTrigger>
-              <TabsTrigger value="debit_credit">Kartu Debit/Kredit</TabsTrigger>
-              <TabsTrigger value="qris">QRIS</TabsTrigger>
-              <TabsTrigger value="e_wallet">E-Wallet</TabsTrigger>
+              <TabsTrigger value="debit_credit" disabled>
+                Kartu Debit/Kredit
+                <Badge variant="outline" className="ml-2">
+                  Segera Hadir
+                </Badge>
+              </TabsTrigger>
+              <TabsTrigger value="qris" disabled>
+                QRIS
+                <Badge variant="outline" className="ml-2">
+                  Segera Hadir
+                </Badge>
+              </TabsTrigger>
+              <TabsTrigger value="e_wallet" disabled>
+                E-Wallet
+                <Badge variant="outline" className="ml-2">
+                  Segera Hadir
+                </Badge>
+              </TabsTrigger>
             </TabsList>
 
             {payments.map((payment, index) => (

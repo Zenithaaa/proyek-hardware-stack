@@ -1,7 +1,7 @@
 // app/api/webhooks/midtrans/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import prisma from "@/lib/prisma";
-import { snap, coreApi } from "@/lib/midtrans"; // Asumsi Anda juga export coreApi untuk verifikasi
+import { prisma } from "@/lib/db";
+import snap from "@/lib/midtrans"; // Import snap dari lib/midtrans
 import crypto from "crypto"; // Untuk verifikasi signature manual jika perlu
 
 // Fungsi untuk verifikasi signature (contoh manual, library midtrans-client mungkin punya cara lebih baik)
@@ -23,8 +23,15 @@ export async function POST(request: NextRequest) {
       JSON.stringify(notificationJson, null, 2)
     );
 
-    // (Opsional tapi direkomendasikan) Simpan raw webhook ke tabel MidtransWebhookLog
-    // const log = await prisma.midtransWebhookLog.create({ data: { requestBody: notificationJson }});
+    // Simpan raw webhook ke tabel MidtransWebhookLog untuk audit trail
+    let log = await prisma.midtransWebhookLog.create({
+      data: {
+        requestBody: notificationJson,
+        receivedAt: new Date(),
+        isVerified: false,
+        processingStatus: "RECEIVED",
+      },
+    });
 
     // 1. Verifikasi Notifikasi menggunakan fungsi dari library midtrans-client
     // Ini cara yang lebih disarankan dan aman.
@@ -49,8 +56,19 @@ export async function POST(request: NextRequest) {
       transactionStatusResponse
     );
 
-    // Update log dengan hasil verifikasi (jika menggunakan tabel log)
-    // await prisma.midtransWebhookLog.update({ where: { id: log.id }, data: { isVerified: true, midtransOrderId, transactionStatus: transactionStatusResponse.transaction_status }});
+    // Update log dengan hasil verifikasi
+    await prisma.midtransWebhookLog.update({
+      where: { id: log.id },
+      data: {
+        isVerified: true,
+        midtransOrderId,
+        midtransTransactionId: transactionStatusResponse.transaction_id,
+        transactionStatus: transactionStatusResponse.transaction_status,
+        paymentType: transactionStatusResponse.payment_type,
+        statusCode: transactionStatusResponse.status_code,
+        grossAmount: transactionStatusResponse.gross_amount,
+      },
+    });
 
     const order_id = transactionStatusResponse.order_id; // Ini adalah ID yang Anda kirim ke Midtrans
     const transaction_status = transactionStatusResponse.transaction_status;
@@ -65,16 +83,40 @@ export async function POST(request: NextRequest) {
     // Jika `order_id` dari Midtrans adalah `idTransaksiInternal-${uuid}`
     const idTransaksiInternal = order_id.split("-")[0]; // Ambil bagian ID internalnya
 
-    const existingTransaction = await prisma.transaksiPenjualan.findUnique({
+    // Coba cari transaksi berdasarkan ID internal terlebih dahulu
+    let existingTransaction = await prisma.transaksiPenjualan.findUnique({
       where: { id: idTransaksiInternal },
       include: { detailTransaksiPenjualan: { include: { item: true } } }, // Untuk update stok
     });
 
+    // Jika tidak ditemukan berdasarkan ID internal, coba cari berdasarkan paymentGatewayOrderId
+    if (!existingTransaction) {
+      existingTransaction = await prisma.transaksiPenjualan.findFirst({
+        where: { paymentGatewayOrderId: order_id },
+        include: { detailTransaksiPenjualan: { include: { item: true } } },
+      });
+    }
+
+    // Jika masih tidak ditemukan, coba cari berdasarkan nomorStruk
+    // Ini untuk kasus di mana order_id adalah nomorStruk
+    if (!existingTransaction) {
+      existingTransaction = await prisma.transaksiPenjualan.findUnique({
+        where: { nomorStruk: order_id },
+        include: { detailTransaksiPenjualan: { include: { item: true } } },
+      });
+    }
+
     if (!existingTransaction) {
       console.error(
-        `Webhook Error: Transaksi dengan ID Internal ${idTransaksiInternal} (dari Midtrans Order ID ${order_id}) tidak ditemukan.`
+        `Webhook Error: Transaksi dengan Midtrans Order ID ${order_id} tidak ditemukan.`
       );
-      // await prisma.midtransWebhookLog.update({ where: { id: log.id }, data: { processingStatus: 'ERROR_NOT_FOUND' }});
+      await prisma.midtransWebhookLog.update({
+        where: { id: log.id },
+        data: {
+          processingStatus: "ERROR_NOT_FOUND",
+          errorMessage: `Transaksi dengan Midtrans Order ID ${order_id} tidak ditemukan`,
+        },
+      });
       return NextResponse.json(
         { status: "error", message: "Transaction not found" },
         { status: 404 }
@@ -88,11 +130,25 @@ export async function POST(request: NextRequest) {
       (transaction_status === "capture" || transaction_status === "settlement")
     ) {
       console.log(`Transaksi ${order_id} sudah pernah diproses sebagai PAID.`);
+
+      // Update log dengan status sukses meskipun tidak ada perubahan
+      await prisma.midtransWebhookLog.update({
+        where: { id: log.id },
+        data: { processingStatus: "SUCCESS_ALREADY_PROCESSED" },
+      });
+
       return NextResponse.json({ status: "ok", message: "Already processed" });
     }
 
     let newStatusPembayaran = existingTransaction.statusPembayaran;
     let newStatusTransaksi = existingTransaction.statusTransaksi;
+
+    // Cek apakah sudah ada pembayaran dengan ID yang sama untuk menghindari duplikasi
+    const existingPayment = await prisma.pembayaranTransaksi.findFirst({
+      where: {
+        paymentGatewayPaymentId: midtransTransactionId,
+      },
+    });
 
     if (transaction_status == "capture" || transaction_status == "settlement") {
       // Pembayaran berhasil (capture untuk kartu, settlement untuk metode lain)
@@ -106,28 +162,35 @@ export async function POST(request: NextRequest) {
         newStatusPembayaran = "PAID_VIA_MIDTRANS";
         newStatusTransaksi = "SELESAI";
 
-        // Kurangi Stok Barang
-        for (const detail of existingTransaction.detailTransaksiPenjualan) {
-          await prisma.item.update({
-            where: { id: detail.itemId },
-            data: { stok: { decrement: detail.jumlah } },
-          });
+        // Kurangi Stok Barang jika belum dikurangi sebelumnya
+        if (existingTransaction.statusPembayaran !== "PAID_VIA_MIDTRANS") {
+          for (const detail of existingTransaction.detailTransaksiPenjualan) {
+            await prisma.item.update({
+              where: { id: detail.itemId },
+              data: { stok: { decrement: detail.jumlah } },
+            });
+          }
         }
 
-        // Catat detail pembayaran ke tbl_pembayaran_transaksi
-        await prisma.pembayaranTransaksi.create({
-          data: {
-            transaksiPenjualanId: existingTransaction.id,
-            metodePembayaran: payment_type.toUpperCase() + "_MIDTRANS", // e.g. GOPAY_MIDTRANS
-            jumlahDibayar: gross_amount,
-            paymentGatewayPaymentId: midtransTransactionId,
-            statusDetailPembayaran: "SUCCESS",
-            waktuPembayaran: new Date(
-              transactionStatusResponse.transaction_time || Date.now()
-            ),
-            paymentGatewayResponseDetails: transactionStatusResponse as any, // Simpan seluruh respons
-          },
-        });
+        // Catat detail pembayaran ke tbl_pembayaran_transaksi jika belum ada
+        if (!existingPayment) {
+          await prisma.pembayaranTransaksi.create({
+            data: {
+              transaksiPenjualanId: existingTransaction.id,
+              metodePembayaran: payment_type.toUpperCase() + "_MIDTRANS", // e.g. GOPAY_MIDTRANS
+              jumlahDibayar: gross_amount,
+              paymentGatewayPaymentId: midtransTransactionId,
+              statusDetailPembayaran: "SUCCESS",
+              waktuPembayaran: new Date(
+                transactionStatusResponse.transaction_time || Date.now()
+              ),
+              paymentGatewayResponseDetails: transactionStatusResponse as any, // Simpan seluruh respons
+              channel:
+                transactionStatusResponse.channel || payment_type.toUpperCase(),
+              amount: gross_amount,
+            },
+          });
+        }
       } else if (fraud_status == "deny") {
         newStatusPembayaran = "FRAUD_DETECTED_MIDTRANS";
         newStatusTransaksi = "DIBATALKAN";
@@ -135,6 +198,26 @@ export async function POST(request: NextRequest) {
     } else if (transaction_status == "pending") {
       newStatusPembayaran = "PENDING_PAYMENT_GATEWAY";
       newStatusTransaksi = "MENUNGGU_PEMBAYARAN_PG";
+
+      // Catat pembayaran pending jika belum ada
+      if (!existingPayment) {
+        await prisma.pembayaranTransaksi.create({
+          data: {
+            transaksiPenjualanId: existingTransaction.id,
+            metodePembayaran: payment_type.toUpperCase() + "_MIDTRANS",
+            jumlahDibayar: gross_amount,
+            paymentGatewayPaymentId: midtransTransactionId,
+            statusDetailPembayaran: "PENDING",
+            waktuPembayaran: new Date(
+              transactionStatusResponse.transaction_time || Date.now()
+            ),
+            paymentGatewayResponseDetails: transactionStatusResponse as any,
+            channel:
+              transactionStatusResponse.channel || payment_type.toUpperCase(),
+            amount: gross_amount,
+          },
+        });
+      }
     } else if (
       transaction_status == "deny" ||
       transaction_status == "cancel" ||
@@ -142,6 +225,35 @@ export async function POST(request: NextRequest) {
     ) {
       newStatusPembayaran = transaction_status.toUpperCase() + "_MIDTRANS"; // FAILED_MIDTRANS, CANCELLED_MIDTRANS, EXPIRED_MIDTRANS
       newStatusTransaksi = "DIBATALKAN";
+
+      // Update status pembayaran jika sudah ada
+      if (existingPayment) {
+        await prisma.pembayaranTransaksi.update({
+          where: { id: existingPayment.id },
+          data: {
+            statusDetailPembayaran: transaction_status.toUpperCase(),
+            paymentGatewayResponseDetails: transactionStatusResponse as any,
+          },
+        });
+      } else {
+        // Catat pembayaran gagal jika belum ada
+        await prisma.pembayaranTransaksi.create({
+          data: {
+            transaksiPenjualanId: existingTransaction.id,
+            metodePembayaran: payment_type.toUpperCase() + "_MIDTRANS",
+            jumlahDibayar: gross_amount,
+            paymentGatewayPaymentId: midtransTransactionId,
+            statusDetailPembayaran: transaction_status.toUpperCase(),
+            waktuPembayaran: new Date(
+              transactionStatusResponse.transaction_time || Date.now()
+            ),
+            paymentGatewayResponseDetails: transactionStatusResponse as any,
+            channel:
+              transactionStatusResponse.channel || payment_type.toUpperCase(),
+            amount: gross_amount,
+          },
+        });
+      }
     }
     // Tambahkan logika untuk status lainnya dari Midtrans jika perlu
 
@@ -155,16 +267,41 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // await prisma.midtransWebhookLog.update({ where: { id: log.id }, data: { processingStatus: 'SUCCESS' }});
+    await prisma.midtransWebhookLog.update({
+      where: { id: log.id },
+      data: { processingStatus: "SUCCESS" },
+    });
     return NextResponse.json({
       status: "ok",
       message: "Webhook processed successfully",
     });
   } catch (error: any) {
     console.error("Error processing Midtrans webhook:", error.message || error);
-    // if (log) {
-    //   await prisma.midtransWebhookLog.update({ where: { id: log.id }, data: { processingStatus: 'ERROR_PROCESSING', errorMessage: error.message }});
-    // }
+    try {
+      // Coba simpan log error jika log sudah dibuat sebelumnya
+      if (typeof log !== "undefined" && log?.id) {
+        await prisma.midtransWebhookLog.update({
+          where: { id: log.id },
+          data: {
+            processingStatus: "ERROR_PROCESSING",
+            errorMessage: error.message || "Unknown error occurred",
+          },
+        });
+      } else {
+        // Jika log belum dibuat, buat log error baru
+        await prisma.midtransWebhookLog.create({
+          data: {
+            requestBody: { error: error.message || "Unknown error occurred" },
+            receivedAt: new Date(),
+            isVerified: false,
+            processingStatus: "ERROR_PROCESSING",
+            errorMessage: error.message || "Unknown error occurred",
+          },
+        });
+      }
+    } catch (logError) {
+      console.error("Error saving webhook log:", logError);
+    }
     return NextResponse.json(
       { status: "error", message: "Internal server error" },
       { status: 500 }
