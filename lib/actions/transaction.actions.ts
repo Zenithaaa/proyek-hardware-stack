@@ -27,22 +27,41 @@ type CreateTransactionPayload = {
 
 export async function createTransaction(data: CreateTransactionPayload) {
   try {
+    // Validasi nilai numerik untuk mencegah overflow
+    const MAX_NUMERIC_VALUE = 9999999999999.99; // Batas maksimum untuk field dengan precision 15, scale 2
+
+    // Hitung subtotal dengan validasi
+    const subtotal = data.cart.reduce((acc, item) => {
+      const validSubtotal = Math.min(Number(item.subtotal), MAX_NUMERIC_VALUE);
+      return acc + validSubtotal;
+    }, 0);
+
+    // Validasi deliveryFee
+    const validDeliveryFee = Math.min(
+      Number(data.deliveryFee),
+      MAX_NUMERIC_VALUE
+    );
+
+    // Hitung grandTotal dengan validasi
+    const grandTotal = Math.min(subtotal + validDeliveryFee, MAX_NUMERIC_VALUE);
+
+    // Validasi payment amounts
+    const validatedPayments = data.payments.map((payment) => ({
+      ...payment,
+      amount: Math.min(Number(payment.amount), MAX_NUMERIC_VALUE),
+    }));
+
     const transaction = await prisma.transaksiPenjualan.create({
       data: {
         userId: data.userId,
         pelangganId: data.pelangganId,
         nomorStruk: `TRX_${Date.now()}`,
-        subtotalSebelumDiskonPajak: data.cart.reduce(
-          (acc, item) => acc + item.subtotal,
-          0
-        ),
-        grandTotal:
-          data.cart.reduce((acc, item) => acc + item.subtotal, 0) +
-          data.deliveryFee,
+        subtotalSebelumDiskonPajak: subtotal,
+        grandTotal: grandTotal,
         perluDiantar: data.needDelivery,
         alamatPengiriman: data.deliveryAddress,
         catatanPengiriman: data.deliveryNote,
-        biayaPengiriman: data.deliveryFee,
+        biayaPengiriman: validDeliveryFee,
         sesiKasirId: data.sesiKasirId,
         statusTransaksi: "PROSES",
         detailTransaksiPenjualan: {
@@ -50,13 +69,19 @@ export async function createTransaction(data: CreateTransactionPayload) {
             itemId: item.id,
             namaItemSaatTransaksi: item.name,
             jumlah: item.quantity,
-            hargaJualSaatTransaksi: item.price,
-            diskonItemNominal: item.discount,
-            subtotal: item.subtotal,
+            hargaJualSaatTransaksi: Math.min(
+              Number(item.price),
+              MAX_NUMERIC_VALUE
+            ),
+            diskonItemNominal: Math.min(
+              Number(item.discount),
+              MAX_NUMERIC_VALUE
+            ),
+            subtotal: Math.min(Number(item.subtotal), MAX_NUMERIC_VALUE),
           })),
         },
         pembayaranTransaksi: {
-          create: data.payments.map((payment) => ({
+          create: validatedPayments.map((payment) => ({
             metodePembayaran: payment.method,
             jumlahDibayar: payment.amount,
             transactionType: "Payment",

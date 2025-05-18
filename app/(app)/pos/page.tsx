@@ -103,7 +103,18 @@ type Payment = {
 
 // Validation Schema
 const paymentSchema = z.object({
-  amount: z.number().min(0, "Jumlah tidak boleh negatif"),
+  amount: z
+    .union([
+      z.string().transform((val) => {
+        // Hapus semua titik dan konversi ke number
+        const numericValue = Number(val.replace(/\./g, ""));
+        return isNaN(numericValue) ? 0 : numericValue;
+      }),
+      z.number(),
+    ])
+    .refine((val) => val >= 0, {
+      message: "Jumlah tidak boleh negatif",
+    }),
   method: z.enum(["CASH", "DEBIT_CREDIT", "QRIS", "E_WALLET"]),
 });
 
@@ -123,7 +134,7 @@ export default function POSPage() {
   const [deliveryNote, setDeliveryNote] = useState("");
   const [deliveryFee, setDeliveryFee] = useState(0);
   const [discountPercent, setDiscountPercent] = useState(0);
-  const [taxPercent, setTaxPercent] = useState(11); // PPN 11%
+  const [taxPercent, setTaxPercent] = useState(0); // Inisialisasi PPN dengan 0%
   const [payments, setPayments] = useState<Payment[]>([]);
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
   const [isTransactionComplete, setIsTransactionComplete] = useState(false);
@@ -136,7 +147,7 @@ export default function POSPage() {
   const [heldTransactions, setHeldTransactions] = useState<any[]>([]);
   const printReceiptRef = useRef<HTMLDivElement>(null);
 
-  // Form untuk pembayaran tunai
+  // Fungsi untuk pembayaran tunai
   const {
     register,
     handleSubmit,
@@ -241,25 +252,33 @@ export default function POSPage() {
 
   // Fungsi untuk menghitung total belanja
   const calculateTotal = () => {
-    const subtotal = cart.reduce((acc, item) => acc + item.subtotal, 0);
-    const discountAmount = (subtotal * discountPercent) / 100;
-    const afterDiscount = subtotal - discountAmount;
-    const taxAmount = (afterDiscount * taxPercent) / 100;
-    return afterDiscount + taxAmount + deliveryFee;
+    // Pastikan semua nilai adalah numerik
+    const subtotal = cart.reduce(
+      (acc, item) => Number(acc) + Number(item.subtotal),
+      0
+    );
+    const discountAmount = (Number(subtotal) * Number(discountPercent)) / 100;
+    const afterDiscount = Number(subtotal) - Number(discountAmount);
+    const taxAmount = (Number(afterDiscount) * Number(taxPercent)) / 100;
+    return Number(afterDiscount) + Number(taxAmount) + Number(deliveryFee);
   };
 
   // Fungsi untuk mendapatkan rincian perhitungan
   const getCalculationDetails = () => {
-    const subtotal = cart.reduce((acc, item) => acc + item.subtotal, 0);
-    const discountAmount = (subtotal * discountPercent) / 100;
-    const afterDiscount = subtotal - discountAmount;
-    const taxAmount = (afterDiscount * taxPercent) / 100;
+    // Pastikan semua nilai adalah numerik
+    const subtotal = cart.reduce(
+      (acc, item) => Number(acc) + Number(item.subtotal),
+      0
+    );
+    const discountAmount = (Number(subtotal) * Number(discountPercent)) / 100;
+    const afterDiscount = Number(subtotal) - Number(discountAmount);
+    const taxAmount = (Number(afterDiscount) * Number(taxPercent)) / 100;
     return {
-      subtotal,
-      discountAmount,
-      afterDiscount,
-      taxAmount,
-      total: afterDiscount + taxAmount + deliveryFee,
+      subtotal: Number(subtotal),
+      discountAmount: Number(discountAmount),
+      afterDiscount: Number(afterDiscount),
+      taxAmount: Number(taxAmount),
+      total: Number(afterDiscount) + Number(taxAmount) + Number(deliveryFee),
     };
   };
 
@@ -489,10 +508,23 @@ export default function POSPage() {
     ]);
   };
 
+  // State untuk dialog konfirmasi pembayaran berhasil
+  const [showPaymentSuccessDialog, setShowPaymentSuccessDialog] =
+    useState(false);
+  const [transactionDetails, setTransactionDetails] = useState<any>(null);
+  const [cashAmount, setCashAmount] = useState<number>(0);
+  const [changeAmount, setChangeAmount] = useState<number>(0);
+
   // Handler untuk pembayaran tunai
   const handleCashPayment = async (data: any) => {
     setIsProcessingPayment(true);
+    toast.loading("Memproses pembayaran...");
     try {
+      // Validasi data pembayaran
+      if (!cart || cart.length === 0) {
+        throw new Error("Keranjang belanja kosong");
+      }
+
       // Verifikasi sesi kasir terlebih dahulu
       if (!sessionId || sessionId.startsWith("SESSION_")) {
         // Jika sessionId tidak valid (masih menggunakan format lokal), buat sesi kasir baru
@@ -521,21 +553,63 @@ export default function POSPage() {
           }
         } catch (sessionError) {
           console.error("Error creating cashier session:", sessionError);
+          toast.dismiss();
           toast.error("Gagal membuat sesi kasir. Silakan coba lagi.");
           setIsProcessingPayment(false);
           return;
         }
       }
 
-      // Proses pembayaran tunai
+      // Proses pembayaran tunai - pastikan nilai amount adalah numerik
+      const cashAmount =
+        typeof data.amount === "string"
+          ? Number(data.amount.replace(/\./g, ""))
+          : Number(data.amount);
+
+      // Validasi nilai numerik untuk mencegah overflow
+      const MAX_NUMERIC_VALUE = 9999999999999.99; // Batas maksimum untuk field dengan precision 15, scale 2
+      const validCashAmount = Math.min(cashAmount, MAX_NUMERIC_VALUE);
+
       const updatedPayments = payments.map((payment) =>
         payment.method === "CASH"
-          ? { ...payment, amount: data.amount, status: "SUCCESS" }
+          ? { ...payment, amount: validCashAmount, status: "SUCCESS" }
           : payment
       );
       setPayments(updatedPayments);
+      setCashAmount(validCashAmount);
+
+      // Hitung kembalian
+      const totalAmount = calculateTotal();
+      const paidAmount = updatedPayments.reduce(
+        (sum, p) => sum + (p.status === "SUCCESS" ? Number(p.amount) : 0),
+        0
+      );
+      setChangeAmount(paidAmount - totalAmount);
 
       if (updatedPayments.every((p) => p.status === "SUCCESS")) {
+        // Validasi nilai numerik untuk mencegah overflow
+        const MAX_NUMERIC_VALUE = 9999999999999.99; // Batas maksimum untuk field dengan precision 15, scale 2
+
+        // Validasi cart items
+        const validatedCart = cart.map((item) => ({
+          ...item,
+          price: Math.min(Number(item.price), MAX_NUMERIC_VALUE),
+          subtotal: Math.min(Number(item.subtotal), MAX_NUMERIC_VALUE),
+          discount: Math.min(Number(item.discount), MAX_NUMERIC_VALUE),
+        }));
+
+        // Validasi deliveryFee
+        const validDeliveryFee = Math.min(
+          Number(deliveryFee),
+          MAX_NUMERIC_VALUE
+        );
+
+        // Validasi payments
+        const validatedPayments = updatedPayments.map((payment) => ({
+          ...payment,
+          amount: Math.min(Number(payment.amount), MAX_NUMERIC_VALUE),
+        }));
+
         // Simpan transaksi ke database
         const response = await fetch("/api/transactions", {
           method: "POST",
@@ -543,27 +617,82 @@ export default function POSPage() {
           body: JSON.stringify({
             userId: user?.id,
             pelangganId: selectedCustomer?.id,
-            cart,
+            cart: validatedCart,
             needDelivery,
             deliveryAddress,
+            deliveryCity,
+            deliveryPostalCode,
+            deliveryRecipientPhone,
             deliveryNote,
-            deliveryFee,
+            deliveryFee: validDeliveryFee,
             sesiKasirId: sessionId, // Sekarang sessionId sudah valid
-            payments: updatedPayments,
+            payments: validatedPayments,
+            discountPercent: Math.min(Number(discountPercent), 100), // Tambahkan informasi diskon
+            taxPercent: Math.min(Number(taxPercent), 100), // Tambahkan informasi pajak
           }),
         });
 
         const result = await response.json();
-        if (!response.ok)
+        if (!response.ok) {
           throw new Error(
             result.error || result.message || "Gagal menyimpan transaksi"
           );
+        }
 
         setIsTransactionComplete(true);
+        toast.dismiss();
         toast.success("Pembayaran berhasil!");
+
+        // Simpan detail transaksi untuk ditampilkan di dialog
+        setTransactionDetails({
+          id: result.data.nomorStruk,
+          date: new Date(),
+          total: totalAmount,
+          deliveryFee: validDeliveryFee,
+          paymentMethod: "Tunai",
+          status: "Berhasil",
+        });
+
+        // Tampilkan dialog konfirmasi pembayaran berhasil
+        setShowPaymentSuccessDialog(true);
+
+        // Siapkan data untuk cetak struk
+        const receiptData = {
+          id: result.data.nomorStruk,
+          tanggal: new Date(),
+          kasir: user?.fullName || "Kasir",
+          pelanggan: selectedCustomer
+            ? {
+                nama: selectedCustomer.name,
+                alamat: selectedCustomer.address,
+                telepon: selectedCustomer.phone,
+              }
+            : undefined,
+          items: validatedCart.map((item) => ({
+            nama: item.name,
+            harga: item.price,
+            jumlah: item.quantity,
+            diskon: item.discount,
+            subtotal: item.subtotal,
+          })),
+          subtotal: Math.min(
+            getCalculationDetails().subtotal,
+            MAX_NUMERIC_VALUE
+          ),
+          diskonTransaksi: Math.min(
+            getCalculationDetails().discountAmount,
+            MAX_NUMERIC_VALUE
+          ),
+          biayaPengiriman: validDeliveryFee,
+          pajak: Math.min(getCalculationDetails().taxAmount, MAX_NUMERIC_VALUE),
+          total: Math.min(getCalculationDetails().total, MAX_NUMERIC_VALUE),
+          metodePembayaran: "Tunai",
+          referensiPembayaran: "",
+        };
       }
     } catch (error: any) {
       console.error("Error processing cash payment:", error);
+      toast.dismiss();
       toast.error(
         `Gagal memproses pembayaran tunai: ${
           error.message || "Terjadi kesalahan"
@@ -572,6 +701,166 @@ export default function POSPage() {
     } finally {
       setIsProcessingPayment(false);
     }
+  };
+
+  // Handler untuk menyelesaikan transaksi
+  const handleFinishTransaction = (withPrint: boolean = false) => {
+    if (withPrint && printReceiptRef.current) {
+      handlePrint();
+    }
+
+    // Reset state untuk transaksi baru
+    setCart([]);
+    setSelectedCustomer(null);
+    setNeedDelivery(false);
+    setDeliveryAddress("");
+    setDeliveryCity("");
+    setDeliveryPostalCode("");
+    setDeliveryRecipientPhone("");
+    setDeliveryNote("");
+    setDeliveryFee(0);
+    setDiscountPercent(0);
+    setTaxPercent(0);
+    setPayments([]);
+    setIsTransactionComplete(false);
+    setShowPaymentSuccessDialog(false);
+    setTransactionDetails(null);
+    setCashAmount(0);
+    setChangeAmount(0);
+
+    // Hapus data dari localStorage
+    localStorage.removeItem("pos_cart");
+    localStorage.removeItem("pos_customer");
+    localStorage.removeItem("pos_delivery");
+    localStorage.removeItem("pos_payments");
+
+    // Generate ID transaksi baru
+    generateNewTransactionId();
+
+    toast.success("Transaksi selesai!");
+  };
+
+  // Dialog konfirmasi pembayaran berhasil
+  const PaymentSuccessDialog = () => (
+    <Dialog
+      open={showPaymentSuccessDialog}
+      onOpenChange={setShowPaymentSuccessDialog}
+    >
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Pembayaran Berhasil</DialogTitle>
+          <DialogDescription>
+            Transaksi telah berhasil diproses
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-2">
+            <div className="text-muted-foreground">No. Transaksi:</div>
+            <div className="font-medium">{transactionDetails?.id}</div>
+
+            <div className="text-muted-foreground">Tanggal:</div>
+            <div className="font-medium">
+              {transactionDetails?.date &&
+                format(transactionDetails.date, "dd MMMM yyyy, HH:mm", {
+                  locale: id,
+                })}
+            </div>
+
+            <div className="text-muted-foreground">Total:</div>
+            <div className="font-medium">
+              {transactionDetails?.total &&
+                new Intl.NumberFormat("id-ID", {
+                  style: "currency",
+                  currency: "IDR",
+                  maximumFractionDigits: 0,
+                }).format(transactionDetails.total)}
+            </div>
+
+            <div className="text-muted-foreground">Metode Pembayaran:</div>
+            <div className="font-medium">
+              {transactionDetails?.paymentMethod}
+            </div>
+
+            <div className="text-muted-foreground">Dibayar:</div>
+            <div className="font-medium">
+              {cashAmount &&
+                new Intl.NumberFormat("id-ID", {
+                  style: "currency",
+                  currency: "IDR",
+                  maximumFractionDigits: 0,
+                }).format(cashAmount)}
+            </div>
+
+            <div className="text-muted-foreground">Kembalian:</div>
+            <div className="font-medium">
+              {changeAmount &&
+                new Intl.NumberFormat("id-ID", {
+                  style: "currency",
+                  currency: "IDR",
+                  maximumFractionDigits: 0,
+                }).format(changeAmount)}
+            </div>
+          </div>
+        </div>
+
+        <DialogFooter className="flex flex-col sm:flex-row gap-2">
+          <Button
+            variant="outline"
+            className="w-full sm:w-auto"
+            onClick={() => handleFinishTransaction(false)}
+          >
+            Selesai
+          </Button>
+          <Button
+            className="w-full sm:w-auto flex items-center gap-2"
+            onClick={() => handleFinishTransaction(true)}
+          >
+            <Printer className="h-4 w-4" />
+            Cetak & Selesai
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+
+  // Komponen tersembunyi untuk mencetak struk
+  const HiddenPrintReceipt = () => {
+    if (!transactionDetails) return null;
+
+    return (
+      <div className="hidden">
+        <PrintReceipt
+          ref={printReceiptRef}
+          data={{
+            id: transactionDetails.id,
+            tanggal: transactionDetails.date,
+            kasir: user?.fullName || "Kasir",
+            pelanggan: selectedCustomer
+              ? {
+                  nama: selectedCustomer.name,
+                  alamat: selectedCustomer.address,
+                  telepon: selectedCustomer.phone,
+                }
+              : undefined,
+            items: cart.map((item) => ({
+              nama: item.name,
+              harga: item.price,
+              jumlah: item.quantity,
+              diskon: item.discount,
+              subtotal: item.subtotal,
+            })),
+            subtotal: getCalculationDetails().subtotal,
+            diskonTransaksi: getCalculationDetails().discountAmount,
+            biayaPengiriman: deliveryFee,
+            pajak: getCalculationDetails().taxAmount,
+            total: getCalculationDetails().total,
+            metodePembayaran: "Tunai",
+            referensiPembayaran: "",
+          }}
+        />
+      </div>
+    );
   };
 
   // Handler untuk pembayaran Midtrans (dinonaktifkan)
@@ -1230,6 +1519,16 @@ export default function POSPage() {
                 placeholder="0"
               />
             </div>
+            <div className="space-y-2">
+              <Label htmlFor="ppn">PPN (%)</Label>
+              <Input
+                type="number"
+                min={0}
+                max={100}
+                value={taxPercent}
+                onChange={(e) => setTaxPercent(Number(e.target.value))}
+              />
+            </div>
             {needDelivery && (
               <div className="space-y-2">
                 <Label htmlFor="delivery-fee">Biaya Pengiriman (Rp)</Label>
@@ -1266,35 +1565,28 @@ export default function POSPage() {
                 </span>
               </div>
               <div className="flex justify-between items-center">
-                <span>PPN ({taxPercent}%)</span>
-                <span>
-                  {new Intl.NumberFormat("id-ID", {
-                    style: "currency",
-                    currency: "IDR",
-                    maximumFractionDigits: 0,
-                  }).format(getCalculationDetails().taxAmount)}
-                </span>
-              </div>
-              {needDelivery && deliveryFee > 0 && (
-                <div className="flex justify-between items-center">
-                  <span>Biaya Pengiriman</span>
-                  <span>
-                    {new Intl.NumberFormat("id-ID", {
-                      style: "currency",
-                      currency: "IDR",
-                      maximumFractionDigits: 0,
-                    }).format(deliveryFee)}
-                  </span>
+                <div className="flex items-center justify-between">
+                  <span>PPN ({taxPercent}%)</span>
                 </div>
-              )}
-              <div className="flex justify-between items-center pt-2 border-t">
+                <div className="text-right mt-1 text-sm text-muted-foreground">
+                  {formatCurrency(getCalculationDetails().taxAmount)}
+                </div>
+              </div>
+              <div className="flex justify-between items-center">
                 <span>Total</span>
                 <span className="font-bold">
                   {new Intl.NumberFormat("id-ID", {
                     style: "currency",
                     currency: "IDR",
                     maximumFractionDigits: 0,
-                  }).format(calculateTotal())}
+                  }).format(
+                    calculateTotal() -
+                      payments.reduce(
+                        (sum, p) =>
+                          sum + (p.status === "SUCCESS" ? p.amount : 0),
+                        0
+                      )
+                  )}
                 </span>
               </div>
             </div>
@@ -1344,6 +1636,11 @@ export default function POSPage() {
                 <TabsContent value="cash">
                   <form onSubmit={handleSubmit(handleCashPayment)}>
                     <div className="space-y-4">
+                      <input
+                        type="hidden"
+                        {...register("method")}
+                        value="CASH"
+                      />
                       <div className="space-y-2">
                         <Label>Sisa yang Harus Dibayar</Label>
                         <Input
@@ -1369,10 +1666,26 @@ export default function POSPage() {
                         </Label>
                         <Input
                           id="cash-amount"
-                          type="number"
-                          {...register("amount", { valueAsNumber: true })}
+                          type="text"
+                          {...register("amount", {
+                            setValueAs: (value) => {
+                              // Hapus semua titik dan konversi ke number
+                              return Number(value.replace(/\./g, ""));
+                            },
+                          })}
                           placeholder="Masukkan jumlah uang"
                           required
+                          onChange={(e) => {
+                            // Hapus semua karakter non-digit
+                            let value = e.target.value.replace(/\D/g, "");
+                            // Format dengan titik sebagai pemisah ribuan
+                            if (value) {
+                              value = Number(value)
+                                .toLocaleString("id-ID")
+                                .replace(/,/g, ".");
+                            }
+                            e.target.value = value;
+                          }}
                         />
                       </div>
                       {errors.amount && (
@@ -1380,19 +1693,51 @@ export default function POSPage() {
                           {errors.amount.message}
                         </p>
                       )}
-                      <Button
-                        type="submit"
-                        className="w-full"
-                        disabled={
-                          isProcessingPayment ||
-                          payment.status === "SUCCESS" ||
-                          cart.length === 0
-                        }
-                      >
-                        {isProcessingPayment
-                          ? "Memproses..."
-                          : "Proses Pembayaran Tunai"}
-                      </Button>
+                      <div className="space-y-2">
+                        {payment.status === "SUCCESS" && (
+                          <div className="text-sm">
+                            <Label>Kembalian</Label>
+                            <div className="font-bold text-green-600">
+                              {formatCurrency(changeAmount)}
+                            </div>
+                          </div>
+                        )}
+                        <Button
+                          type="submit"
+                          className="w-full"
+                          disabled={
+                            isProcessingPayment ||
+                            payment.status === "SUCCESS" ||
+                            cart.length === 0
+                          }
+                        >
+                          {isProcessingPayment
+                            ? "Memproses..."
+                            : payment.status === "SUCCESS"
+                            ? "Pembayaran Berhasil"
+                            : "Proses Pembayaran Tunai"}
+                        </Button>
+                        {payment.status === "SUCCESS" && (
+                          <div className="grid grid-cols-2 gap-2 mt-2">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              onClick={() => handleFinishTransaction(true)}
+                            >
+                              <Printer className="mr-2 h-4 w-4" />
+                              Transaksi Selesai & Cetak Struk
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              onClick={() => handleFinishTransaction(false)}
+                            >
+                              <Receipt className="mr-2 h-4 w-4" />
+                              Transaksi Selesai (Tanpa Cetak)
+                            </Button>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </form>
                 </TabsContent>
@@ -1513,7 +1858,7 @@ export default function POSPage() {
                 onClick={handleAddPayment}
                 className="w-full mt-4"
               >
-                + Tambah Cara Bayar Lain
+                + {payments.length === 0 ? "Bayar" : "Tambah Cara Bayar Lain"}
               </Button>
             )}
 
@@ -1542,13 +1887,95 @@ export default function POSPage() {
         </CardContent>
       </Card>
 
+      {/* Dialog konfirmasi pembayaran berhasil */}
+      <Dialog
+        open={showPaymentSuccessDialog}
+        onOpenChange={setShowPaymentSuccessDialog}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Pembayaran Berhasil</DialogTitle>
+            <DialogDescription>
+              Transaksi telah berhasil diproses
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-2">
+              <div className="text-muted-foreground">No. Transaksi:</div>
+              <div className="font-medium">{transactionDetails?.id}</div>
+
+              <div className="text-muted-foreground">Tanggal:</div>
+              <div className="font-medium">
+                {transactionDetails?.date &&
+                  format(transactionDetails.date, "dd MMMM yyyy, HH:mm", {
+                    locale: id,
+                  })}
+              </div>
+
+              <div className="text-muted-foreground">Total:</div>
+              <div className="font-medium">
+                {transactionDetails?.total &&
+                  new Intl.NumberFormat("id-ID", {
+                    style: "currency",
+                    currency: "IDR",
+                    maximumFractionDigits: 0,
+                  }).format(transactionDetails.total)}
+              </div>
+
+              <div className="text-muted-foreground">Metode Pembayaran:</div>
+              <div className="font-medium">
+                {transactionDetails?.paymentMethod}
+              </div>
+
+              <div className="text-muted-foreground">Dibayar:</div>
+              <div className="font-medium">
+                {cashAmount &&
+                  new Intl.NumberFormat("id-ID", {
+                    style: "currency",
+                    currency: "IDR",
+                    maximumFractionDigits: 0,
+                  }).format(cashAmount)}
+              </div>
+
+              <div className="text-muted-foreground">Kembalian:</div>
+              <div className="font-medium">
+                {changeAmount &&
+                  new Intl.NumberFormat("id-ID", {
+                    style: "currency",
+                    currency: "IDR",
+                    maximumFractionDigits: 0,
+                  }).format(changeAmount)}
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter className="flex flex-col sm:flex-row gap-2">
+            <Button
+              variant="outline"
+              className="w-full sm:w-auto"
+              onClick={() => handleFinishTransaction(false)}
+            >
+              Selesai
+            </Button>
+            <Button
+              className="w-full sm:w-auto flex items-center gap-2"
+              onClick={() => handleFinishTransaction(true)}
+            >
+              <Printer className="h-4 w-4" />
+              Cetak & Selesai
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Komponen Struk untuk Cetak (Tersembunyi) */}
       <div style={{ display: "none" }}>
         <PrintReceipt
           ref={printReceiptRef}
           data={{
-            id: transactionId,
-            tanggal: new Date(),
+            id: transactionDetails?.id || transactionId,
+            tanggal: transactionDetails?.date || new Date(),
             kasir: user?.fullName || "",
             pelanggan: selectedCustomer
               ? {
@@ -1564,11 +1991,11 @@ export default function POSPage() {
               diskon: item.discount,
               subtotal: item.subtotal,
             })),
-            subtotal: cart.reduce((sum, item) => sum + item.subtotal, 0),
-            diskonTransaksi: 0, // Sesuaikan dengan logika diskon
+            subtotal: getCalculationDetails().subtotal,
+            diskonTransaksi: getCalculationDetails().discountAmount,
             biayaPengiriman: deliveryFee,
-            pajak: 0, // Sesuaikan dengan logika pajak
-            total: calculateTotal(),
+            pajak: getCalculationDetails().taxAmount,
+            total: getCalculationDetails().total,
             metodePembayaran: payments
               .filter((p) => p.status === "SUCCESS")
               .map((p) => p.method)
@@ -1581,3 +2008,17 @@ export default function POSPage() {
     </div>
   );
 }
+
+// Fungsi untuk memformat mata uang
+const formatCurrency = (amount: number | bigint | null | undefined) => {
+  if (amount === null || amount === undefined) {
+    amount = 0;
+  }
+  const numericAmount = typeof amount === "bigint" ? Number(amount) : amount;
+  return new Intl.NumberFormat("id-ID", {
+    style: "currency",
+    currency: "IDR",
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(numericAmount);
+};
