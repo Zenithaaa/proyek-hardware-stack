@@ -1,6 +1,6 @@
 // app/api/transactions/route.ts
 import { NextResponse } from "next/server";
-import prisma from "@/lib/prisma";
+import { prisma } from "@/lib/db";
 import { createTransaction } from "@/lib/actions/transaction.actions";
 
 export async function POST(request: Request) {
@@ -12,6 +12,9 @@ export async function POST(request: Request) {
       cart,
       needDelivery,
       deliveryAddress,
+      deliveryCity,
+      deliveryPostalCode,
+      deliveryRecipientPhone,
       deliveryNote,
       deliveryFee,
       sesiKasirId,
@@ -33,10 +36,15 @@ export async function POST(request: Request) {
       cart,
       needDelivery,
       deliveryAddress,
+      deliveryCity,
+      deliveryPostalCode,
+      deliveryRecipientPhone,
       deliveryNote,
       deliveryFee,
       sesiKasirId,
       payments,
+      discountPercent: body.discountPercent, // Tambahkan discountPercent
+      taxPercent: body.taxPercent, // Tambahkan taxPercent
     });
 
     if (!result.success) {

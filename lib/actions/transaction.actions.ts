@@ -16,6 +16,9 @@ type CreateTransactionPayload = {
   }[];
   needDelivery: boolean;
   deliveryAddress?: string;
+  deliveryCity?: string;
+  deliveryPostalCode?: string;
+  deliveryRecipientPhone?: string;
   deliveryNote?: string;
   deliveryFee: number;
   payments: {
@@ -23,6 +26,8 @@ type CreateTransactionPayload = {
     amount: number;
   }[];
   sesiKasirId?: string;
+  discountPercent: number;
+  taxPercent: number;
 };
 
 export async function createTransaction(data: CreateTransactionPayload) {
@@ -36,14 +41,40 @@ export async function createTransaction(data: CreateTransactionPayload) {
       return acc + validSubtotal;
     }, 0);
 
+    // Validasi dan hitung diskon transaksi
+    const discountPercent =
+      typeof data.discountPercent === "number" && !isNaN(data.discountPercent)
+        ? data.discountPercent
+        : 0;
+    const totalDiskonTransaksi = Math.min(
+      (subtotal * discountPercent) / 100,
+      MAX_NUMERIC_VALUE
+    );
+
+    // Hitung subtotal setelah diskon
+    const subtotalAfterDiscount = subtotal - totalDiskonTransaksi;
+
+    // Validasi dan hitung pajak transaksi
+    const taxPercent =
+      typeof data.taxPercent === "number" && !isNaN(data.taxPercent)
+        ? data.taxPercent
+        : 0;
+    const totalPajak = Math.min(
+      (subtotalAfterDiscount * taxPercent) / 100,
+      MAX_NUMERIC_VALUE
+    );
+
     // Validasi deliveryFee
     const validDeliveryFee = Math.min(
-      Number(data.deliveryFee),
+      Number(data.deliveryFee), // Asumsi data.deliveryFee sudah divalidasi di frontend atau diubah menjadi number
       MAX_NUMERIC_VALUE
     );
 
     // Hitung grandTotal dengan validasi
-    const grandTotal = Math.min(subtotal + validDeliveryFee, MAX_NUMERIC_VALUE);
+    const grandTotal = Math.min(
+      subtotalAfterDiscount + totalPajak + validDeliveryFee,
+      MAX_NUMERIC_VALUE
+    );
 
     // Validasi payment amounts
     const validatedPayments = data.payments.map((payment) => ({
@@ -57,13 +88,18 @@ export async function createTransaction(data: CreateTransactionPayload) {
         pelangganId: data.pelangganId,
         nomorStruk: `TRX_${Date.now()}`,
         subtotalSebelumDiskonPajak: subtotal,
+        totalDiskonTransaksi: totalDiskonTransaksi,
+        totalPajak: totalPajak,
         grandTotal: grandTotal,
         perluDiantar: data.needDelivery,
         alamatPengiriman: data.deliveryAddress,
+        kotaPengiriman: data.deliveryCity,
+        kodePosPengiriman: data.deliveryPostalCode,
+        noTelpPenerima: data.deliveryRecipientPhone,
         catatanPengiriman: data.deliveryNote,
         biayaPengiriman: validDeliveryFee,
         sesiKasirId: data.sesiKasirId,
-        statusTransaksi: "PROSES",
+        statusTransaksi: "SELESAI",
         detailTransaksiPenjualan: {
           create: data.cart.map((item) => ({
             itemId: item.id,

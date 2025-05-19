@@ -7,12 +7,8 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { format } from "date-fns";
 import { id } from "date-fns/locale";
-import { useReactToPrint } from "react-to-print";
 import { toast } from "sonner";
 import Script from "next/script";
-
-// Components
-import PrintReceipt from "@/components/print-receipt";
 
 // Shadcn Components
 import {
@@ -106,6 +102,7 @@ const paymentSchema = z.object({
   amount: z
     .union([
       z.string().transform((val) => {
+        if (typeof val !== "string") return 0; // Tambahkan pemeriksaan tipe
         // Hapus semua titik dan konversi ke number
         const numericValue = Number(val.replace(/\./g, ""));
         return isNaN(numericValue) ? 0 : numericValue;
@@ -134,7 +131,7 @@ export default function POSPage() {
   const [deliveryNote, setDeliveryNote] = useState("");
   const [deliveryFee, setDeliveryFee] = useState(0);
   const [discountPercent, setDiscountPercent] = useState(0);
-  const [taxPercent, setTaxPercent] = useState(0); // Inisialisasi PPN dengan 0%
+  const [taxPercent, setTaxPercent] = useState(0); // Inisialis PPN dengan 0%
   const [payments, setPayments] = useState<Payment[]>([]);
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
   const [isTransactionComplete, setIsTransactionComplete] = useState(false);
@@ -146,6 +143,32 @@ export default function POSPage() {
   const [isSearchingCustomer, setIsSearchingCustomer] = useState(false);
   const [heldTransactions, setHeldTransactions] = useState<any[]>([]);
   const printReceiptRef = useRef<HTMLDivElement>(null);
+
+  const resetTransactionState = () => {
+    setCart([]);
+    setSelectedCustomer(null);
+    setNeedDelivery(false);
+    setDeliveryAddress("");
+    setDeliveryCity("");
+    setDeliveryPostalCode("");
+    setDeliveryRecipientPhone("");
+    setDeliveryNote("");
+    setDeliveryFee(0);
+    setDiscountPercent(0);
+    setTaxPercent(0);
+    setPayments([]);
+    setIsTransactionComplete(false);
+    setTransactionDetails(null);
+    setCashAmount(0);
+    setChangeAmount(0);
+
+    localStorage.removeItem("pos_cart");
+    localStorage.removeItem("pos_customer");
+    localStorage.removeItem("pos_delivery");
+    localStorage.removeItem("pos_payments");
+    // sessionId and transactionId are handled by generateNewTransactionId()
+    generateNewTransactionId();
+  };
 
   // Fungsi untuk pembayaran tunai
   const {
@@ -166,6 +189,9 @@ export default function POSPage() {
         const savedPayments = localStorage.getItem("pos_payments");
         const savedSessionId = localStorage.getItem("pos_session_id");
         const savedTransactionId = localStorage.getItem("pos_transaction_id");
+        const savedHeldTransactions = localStorage.getItem(
+          "pos_held_transactions"
+        ); // Muat transaksi tertahan
 
         if (savedCart) setCart(JSON.parse(savedCart));
         if (savedCustomer) setSelectedCustomer(JSON.parse(savedCustomer));
@@ -186,6 +212,8 @@ export default function POSPage() {
         } else {
           generateNewTransactionId();
         }
+        if (savedHeldTransactions)
+          setHeldTransactions(JSON.parse(savedHeldTransactions)); // Set transaksi tertahan
       } catch (error) {
         console.error("Error loading saved state:", error);
         // Jika terjadi error saat memuat data, generate ID transaksi baru
@@ -264,6 +292,18 @@ export default function POSPage() {
   };
 
   // Fungsi untuk mendapatkan rincian perhitungan
+  const handleDeliveryToggle = (checked: boolean) => {
+    setNeedDelivery(checked);
+    if (!checked) {
+      // Reset semua field pengiriman saat switch dinonaktifkan
+      setDeliveryAddress("");
+      setDeliveryCity("");
+      setDeliveryPostalCode("");
+      setDeliveryRecipientPhone("");
+      setDeliveryNote("");
+      setDeliveryFee(0);
+    }
+  };
   const getCalculationDetails = () => {
     // Pastikan semua nilai adalah numerik
     const subtotal = cart.reduce(
@@ -278,6 +318,7 @@ export default function POSPage() {
       discountAmount: Number(discountAmount),
       afterDiscount: Number(afterDiscount),
       taxAmount: Number(taxAmount),
+      deliveryFee: Number(deliveryFee),
       total: Number(afterDiscount) + Number(taxAmount) + Number(deliveryFee),
     };
   };
@@ -399,6 +440,10 @@ export default function POSPage() {
       localStorage.setItem("pos_payments", JSON.stringify(payments));
       localStorage.setItem("pos_session_id", sessionId);
       localStorage.setItem("pos_transaction_id", transactionId);
+      localStorage.setItem(
+        "pos_held_transactions",
+        JSON.stringify(heldTransactions)
+      ); // Simpan transaksi tertahan
     } catch (error) {
       console.error("Error saving state:", error);
     }
@@ -423,6 +468,9 @@ export default function POSPage() {
         deliveryRecipientPhone,
         deliveryNote,
         deliveryFee,
+        total: getCalculationDetails().total, // Simpan total transaksi
+        discountPercent: discountPercent, // Simpan persentase diskon
+        taxPercent: taxPercent, // Simpan persentase pajak
       },
     ]);
     // Hapus data dari localStorage saat transaksi ditahan
@@ -514,6 +562,7 @@ export default function POSPage() {
   const [transactionDetails, setTransactionDetails] = useState<any>(null);
   const [cashAmount, setCashAmount] = useState<number>(0);
   const [changeAmount, setChangeAmount] = useState<number>(0);
+  const [inputCashAmount, setInputCashAmount] = useState<number>(0);
 
   // Handler untuk pembayaran tunai
   const handleCashPayment = async (data: any) => {
@@ -705,39 +754,23 @@ export default function POSPage() {
 
   // Handler untuk menyelesaikan transaksi
   const handleFinishTransaction = (withPrint: boolean = false) => {
-    if (withPrint && printReceiptRef.current) {
-      handlePrint();
+    if (withPrint) {
+      if (printReceiptRef.current && transactionDetails) {
+      } else {
+        toast.error(
+          "Gagal menyiapkan struk untuk dicetak. Data transaksi tidak lengkap atau referensi cetak tidak ditemukan."
+        );
+        // Fallback: if printing can't even start, reset and close dialog
+        setShowPaymentSuccessDialog(false); // Close dialog
+        resetTransactionState(); // Reset state
+        toast.success("Transaksi selesai (proses cetak gagal dimulai)."); // Inform user
+      }
+    } else {
+      // "Selesai" button without printing
+      setShowPaymentSuccessDialog(false); // Close dialog
+      resetTransactionState(); // Reset state
+      toast.success("Transaksi selesai!"); // Inform user
     }
-
-    // Reset state untuk transaksi baru
-    setCart([]);
-    setSelectedCustomer(null);
-    setNeedDelivery(false);
-    setDeliveryAddress("");
-    setDeliveryCity("");
-    setDeliveryPostalCode("");
-    setDeliveryRecipientPhone("");
-    setDeliveryNote("");
-    setDeliveryFee(0);
-    setDiscountPercent(0);
-    setTaxPercent(0);
-    setPayments([]);
-    setIsTransactionComplete(false);
-    setShowPaymentSuccessDialog(false);
-    setTransactionDetails(null);
-    setCashAmount(0);
-    setChangeAmount(0);
-
-    // Hapus data dari localStorage
-    localStorage.removeItem("pos_cart");
-    localStorage.removeItem("pos_customer");
-    localStorage.removeItem("pos_delivery");
-    localStorage.removeItem("pos_payments");
-
-    // Generate ID transaksi baru
-    generateNewTransactionId();
-
-    toast.success("Transaksi selesai!");
   };
 
   // Dialog konfirmasi pembayaran berhasil
@@ -756,10 +789,10 @@ export default function POSPage() {
 
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-2">
-            <div className="text-muted-foreground">No. Transaksi:</div>
+            <div className="text-muted-foreground">No. Transaksi :</div>
             <div className="font-medium">{transactionDetails?.id}</div>
 
-            <div className="text-muted-foreground">Tanggal:</div>
+            <div className="text-muted-foreground">Tanggal :</div>
             <div className="font-medium">
               {transactionDetails?.date &&
                 format(transactionDetails.date, "dd MMMM yyyy, HH:mm", {
@@ -767,7 +800,7 @@ export default function POSPage() {
                 })}
             </div>
 
-            <div className="text-muted-foreground">Total:</div>
+            <div className="text-muted-foreground">Total :</div>
             <div className="font-medium">
               {transactionDetails?.total &&
                 new Intl.NumberFormat("id-ID", {
@@ -777,12 +810,12 @@ export default function POSPage() {
                 }).format(transactionDetails.total)}
             </div>
 
-            <div className="text-muted-foreground">Metode Pembayaran:</div>
+            <div className="text-muted-foreground">Metode Pembayaran :</div>
             <div className="font-medium">
               {transactionDetails?.paymentMethod}
             </div>
 
-            <div className="text-muted-foreground">Dibayar:</div>
+            <div className="text-muted-foreground">Dibayar :</div>
             <div className="font-medium">
               {cashAmount &&
                 new Intl.NumberFormat("id-ID", {
@@ -792,7 +825,7 @@ export default function POSPage() {
                 }).format(cashAmount)}
             </div>
 
-            <div className="text-muted-foreground">Kembalian:</div>
+            <div className="text-muted-foreground">Kembalian :</div>
             <div className="font-medium">
               {changeAmount &&
                 new Intl.NumberFormat("id-ID", {
@@ -806,62 +839,15 @@ export default function POSPage() {
 
         <DialogFooter className="flex flex-col sm:flex-row gap-2">
           <Button
-            variant="outline"
             className="w-full sm:w-auto"
             onClick={() => handleFinishTransaction(false)}
           >
             Selesai
           </Button>
-          <Button
-            className="w-full sm:w-auto flex items-center gap-2"
-            onClick={() => handleFinishTransaction(true)}
-          >
-            <Printer className="h-4 w-4" />
-            Cetak & Selesai
-          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
   );
-
-  // Komponen tersembunyi untuk mencetak struk
-  const HiddenPrintReceipt = () => {
-    if (!transactionDetails) return null;
-
-    return (
-      <div className="hidden">
-        <PrintReceipt
-          ref={printReceiptRef}
-          data={{
-            id: transactionDetails.id,
-            tanggal: transactionDetails.date,
-            kasir: user?.fullName || "Kasir",
-            pelanggan: selectedCustomer
-              ? {
-                  nama: selectedCustomer.name,
-                  alamat: selectedCustomer.address,
-                  telepon: selectedCustomer.phone,
-                }
-              : undefined,
-            items: cart.map((item) => ({
-              nama: item.name,
-              harga: item.price,
-              jumlah: item.quantity,
-              diskon: item.discount,
-              subtotal: item.subtotal,
-            })),
-            subtotal: getCalculationDetails().subtotal,
-            diskonTransaksi: getCalculationDetails().discountAmount,
-            biayaPengiriman: deliveryFee,
-            pajak: getCalculationDetails().taxAmount,
-            total: getCalculationDetails().total,
-            metodePembayaran: "Tunai",
-            referensiPembayaran: "",
-          }}
-        />
-      </div>
-    );
-  };
 
   // Handler untuk pembayaran Midtrans (dinonaktifkan)
   const handleMidtransPayment = async (method: PaymentMethod) => {
@@ -1067,21 +1053,6 @@ export default function POSPage() {
     }
   };
 
-  // Handler untuk mencetak struk
-  const handlePrint = useReactToPrint({
-    content: () => printReceiptRef.current,
-    onAfterPrint: () => {
-      toast.success("Struk berhasil dicetak");
-      // Reset state untuk transaksi baru
-      setCart([]);
-      setSelectedCustomer(null);
-      setNeedDelivery(false);
-      setPayments([]);
-      setIsTransactionComplete(false);
-      generateNewTransactionId();
-    },
-  });
-
   // Handler untuk menyelesaikan transaksi tanpa cetak
   const handleCompleteWithoutPrint = () => {
     toast.success("Transaksi selesai");
@@ -1113,7 +1084,7 @@ export default function POSPage() {
                 {format(new Date(), "dd MMMM yyyy, HH.mm", { locale: id })}
               </CardDescription>
             </div>
-            <div className="flex gap-2">
+            <div className="flex flex-col sm:flex-row gap-2">
               <Button variant="outline" onClick={generateNewTransactionId}>
                 <FilePlus2 className="mr-2 h-4 w-4" />
                 Transaksi Baru
@@ -1136,7 +1107,7 @@ export default function POSPage() {
                       Pilih transaksi yang ingin dipanggil kembali
                     </DialogDescription>
                   </DialogHeader>
-                  <ScrollArea className="h-[300px]">
+                  <ScrollArea className="h-[300px] overflow-x-auto overflow-y-auto">
                     {heldTransactions.length > 0 ? (
                       <div className="space-y-2">
                         {heldTransactions.map((transaction) => (
@@ -1159,10 +1130,7 @@ export default function POSPage() {
                                 currency: "IDR",
                                 maximumFractionDigits: 0,
                               }).format(
-                                transaction.cart.reduce(
-                                  (acc, item) => acc + item.subtotal,
-                                  0
-                                ) + transaction.deliveryFee
+                                transaction.total // Menggunakan total yang disimpan
                               )}
                             </p>
                           </div>
@@ -1219,11 +1187,8 @@ export default function POSPage() {
               <Badge variant={selectedCustomer ? "default" : "secondary"}>
                 {selectedCustomer ? selectedCustomer.name : "Pelanggan Umum"}
               </Badge>
-              {selectedCustomer?.points && (
-                <Badge variant="outline">Poin: {selectedCustomer.points}</Badge>
-              )}
             </div>
-            <div className="flex gap-2">
+            <div className="flex flex-col sm:flex-row gap-2">
               <Dialog>
                 <DialogTrigger asChild>
                   <Button variant="outline">
@@ -1247,7 +1212,7 @@ export default function POSPage() {
                         searchCustomers(e.target.value);
                       }}
                     />
-                    <ScrollArea className="h-[300px]">
+                    <ScrollArea className="h-[300px] overflow-x-auto overflow-y-auto">
                       {isSearchingCustomer ? (
                         <div className="flex items-center justify-center py-4">
                           <span className="text-muted-foreground">
@@ -1378,7 +1343,7 @@ export default function POSPage() {
           </CardHeader>
           <CardContent>
             <Input
-              placeholder="Scan Barcode / Cari Kode / Nama Barang"
+              placeholder="Cari Kode / Nama Barang"
               className="mb-4"
               value={searchQuery}
               onChange={(e) => {
@@ -1386,7 +1351,7 @@ export default function POSPage() {
                 searchItems(e.target.value);
               }}
             />
-            <ScrollArea className="h-[300px]">
+            <ScrollArea className="h-[300px] overflow-x-auto overflow-y-auto">
               {isSearching ? (
                 <div className="flex items-center justify-center py-4">
                   <span className="text-muted-foreground">
@@ -1431,7 +1396,7 @@ export default function POSPage() {
             <CardTitle>Keranjang Belanja</CardTitle>
           </CardHeader>
           <CardContent>
-            <ScrollArea className="h-[300px]">
+            <ScrollArea className="h-[300px] overflow-x-auto overflow-y-auto">
               {cart.length > 0 ? (
                 <Table>
                   <TableHeader>
@@ -1534,64 +1499,44 @@ export default function POSPage() {
                 <Label htmlFor="delivery-fee">Biaya Pengiriman (Rp)</Label>
                 <Input
                   id="delivery-fee"
-                  type="number"
-                  value={deliveryFee}
-                  onChange={(e) => setDeliveryFee(Number(e.target.value))}
-                  placeholder="0"
+                  type="text"
+                  value={deliveryFee.toLocaleString()}
+                  onChange={(e) => {
+                    const value = e.target.value.replace(/\D/g, "");
+                    setDeliveryFee(Number(value));
+                  }}
+                  className="text-left"
                 />
               </div>
             )}
-
-            <div className="p-4 border rounded-lg space-y-2">
-              <div className="flex justify-between items-center">
-                <span>Subtotal</span>
-                <span>
-                  {new Intl.NumberFormat("id-ID", {
-                    style: "currency",
-                    currency: "IDR",
-                    maximumFractionDigits: 0,
-                  }).format(getCalculationDetails().subtotal)}
-                </span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span>Diskon ({discountPercent}%)</span>
-                <span className="text-red-500">
-                  -
-                  {new Intl.NumberFormat("id-ID", {
-                    style: "currency",
-                    currency: "IDR",
-                    maximumFractionDigits: 0,
-                  }).format(getCalculationDetails().discountAmount)}
-                </span>
-              </div>
-              <div className="flex justify-between items-center">
-                <div className="flex items-center justify-between">
-                  <span>PPN ({taxPercent}%)</span>
-                </div>
-                <div className="text-right mt-1 text-sm text-muted-foreground">
-                  {formatCurrency(getCalculationDetails().taxAmount)}
-                </div>
-              </div>
-              <div className="flex justify-between items-center">
-                <span>Total</span>
-                <span className="font-bold">
-                  {new Intl.NumberFormat("id-ID", {
-                    style: "currency",
-                    currency: "IDR",
-                    maximumFractionDigits: 0,
-                  }).format(
-                    calculateTotal() -
-                      payments.reduce(
-                        (sum, p) =>
-                          sum + (p.status === "SUCCESS" ? p.amount : 0),
-                        0
-                      )
-                  )}
-                </span>
-              </div>
-            </div>
           </div>
 
+          <div className="flex justify-between">
+            <span>Subtotal</span>
+            <span>Rp {getCalculationDetails().subtotal.toLocaleString()}</span>
+          </div>
+          <div className="flex justify-between text-red-500">
+            <span>Diskon ({discountPercent}%)</span>
+            <span>
+              -Rp {getCalculationDetails().discountAmount.toLocaleString()}
+            </span>
+          </div>
+          <div className="flex justify-between">
+            <span>PPN ({taxPercent}%)</span>
+            <span>Rp {getCalculationDetails().taxAmount.toLocaleString()}</span>
+          </div>
+          {needDelivery && (
+            <div className="flex justify-between">
+              <span>Biaya Pengiriman</span>
+              <span>
+                Rp {getCalculationDetails().deliveryFee.toLocaleString()}
+              </span>
+            </div>
+          )}
+          <div className="flex justify-between font-bold space-y-2">
+            <span>Total</span>
+            <span>Rp {getCalculationDetails().total.toLocaleString()}</span>
+          </div>
           <Tabs defaultValue="cash" className="w-full">
             <TabsList className="grid w-full grid-cols-4">
               <TabsTrigger value="cash">Tunai</TabsTrigger>
@@ -1618,7 +1563,7 @@ export default function POSPage() {
             {payments.map((payment, index) => (
               <div key={index} className="mb-4 p-4 border rounded-lg">
                 <div className="flex justify-between items-center mb-4">
-                  <h3 className="font-medium">Pembayaran {index + 1}</h3>
+                  <h3 className="font-medium">Pembayaran</h3>
                   {payment.status !== "SUCCESS" && (
                     <Button
                       variant="ghost"
@@ -1642,7 +1587,7 @@ export default function POSPage() {
                         value="CASH"
                       />
                       <div className="space-y-2">
-                        <Label>Sisa yang Harus Dibayar</Label>
+                        <Label>Total Pembayaran</Label>
                         <Input
                           type="text"
                           value={new Intl.NumberFormat("id-ID", {
@@ -1653,7 +1598,10 @@ export default function POSPage() {
                             calculateTotal() -
                               payments.reduce(
                                 (sum, p) =>
-                                  sum + (p.status === "SUCCESS" ? p.amount : 0),
+                                  sum +
+                                  (p.status === "SUCCESS"
+                                    ? Number(p.amount)
+                                    : 0),
                                 0
                               )
                           )}
@@ -1669,8 +1617,13 @@ export default function POSPage() {
                           type="text"
                           {...register("amount", {
                             setValueAs: (value) => {
+                              // Tambahkan pemeriksaan tipe sebelum memanggil replace
+                              if (typeof value !== "string") return value; // Kembalikan nilai asli jika bukan string
                               // Hapus semua titik dan konversi ke number
-                              return Number(value.replace(/\./g, ""));
+                              const numericValue = Number(
+                                value.replace(/\./g, "")
+                              );
+                              return isNaN(numericValue) ? 0 : numericValue;
                             },
                           })}
                           placeholder="Masukkan jumlah uang"
@@ -1683,6 +1636,12 @@ export default function POSPage() {
                               value = Number(value)
                                 .toLocaleString("id-ID")
                                 .replace(/,/g, ".");
+                              // Update state dengan nilai numerik untuk validasi tombol
+                              setInputCashAmount(
+                                Number(value.replace(/\./g, ""))
+                              );
+                            } else {
+                              setInputCashAmount(0);
                             }
                             e.target.value = value;
                           }}
@@ -1708,7 +1667,9 @@ export default function POSPage() {
                           disabled={
                             isProcessingPayment ||
                             payment.status === "SUCCESS" ||
-                            cart.length === 0
+                            cart.length === 0 ||
+                            // Memeriksa apakah jumlah uang yang diterima kurang dari total pembayaran
+                            inputCashAmount < calculateTotal()
                           }
                         >
                           {isProcessingPayment
@@ -1718,22 +1679,13 @@ export default function POSPage() {
                             : "Proses Pembayaran Tunai"}
                         </Button>
                         {payment.status === "SUCCESS" && (
-                          <div className="grid grid-cols-2 gap-2 mt-2">
-                            <Button
-                              type="button"
-                              variant="outline"
-                              onClick={() => handleFinishTransaction(true)}
-                            >
-                              <Printer className="mr-2 h-4 w-4" />
-                              Transaksi Selesai & Cetak Struk
-                            </Button>
+                          <div className="grid gap-2 mt-2">
                             <Button
                               type="button"
                               variant="outline"
                               onClick={() => handleFinishTransaction(false)}
                             >
-                              <Receipt className="mr-2 h-4 w-4" />
-                              Transaksi Selesai (Tanpa Cetak)
+                              Transaksi Selesai
                             </Button>
                           </div>
                         )}
@@ -1852,7 +1804,7 @@ export default function POSPage() {
             ))}
 
             {/* Tombol Tambah Pembayaran */}
-            {payments.length < 2 && !isTransactionComplete && (
+            {payments.length === 0 && !isTransactionComplete && (
               <Button
                 variant="outline"
                 onClick={handleAddPayment}
@@ -1865,11 +1817,7 @@ export default function POSPage() {
             {/* Tombol Penyelesaian Transaksi */}
             {isTransactionComplete && (
               <div className="space-y-4 mt-6 border-t pt-4">
-                <Button
-                  className="w-full hidden"
-                  data-print-button
-                  onClick={handlePrint}
-                >
+                <Button className="w-full hidden">
                   <Printer className="mr-2 h-4 w-4" />
                   Transaksi Selesai & Cetak Struk
                 </Button>
@@ -1878,15 +1826,13 @@ export default function POSPage() {
                   className="w-full"
                   onClick={handleCompleteWithoutPrint}
                 >
-                  <Receipt className="mr-2 h-4 w-4" />
-                  Transaksi Selesai (Tanpa Cetak)
+                  Transaksi Selesai
                 </Button>
               </div>
             )}
           </Tabs>
         </CardContent>
       </Card>
-
       {/* Dialog konfirmasi pembayaran berhasil */}
       <Dialog
         open={showPaymentSuccessDialog}
@@ -1902,10 +1848,10 @@ export default function POSPage() {
 
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-2">
-              <div className="text-muted-foreground">No. Transaksi:</div>
+              <div className="text-muted-foreground">No. Transaksi :</div>
               <div className="font-medium">{transactionDetails?.id}</div>
 
-              <div className="text-muted-foreground">Tanggal:</div>
+              <div className="text-muted-foreground">Tanggal :</div>
               <div className="font-medium">
                 {transactionDetails?.date &&
                   format(transactionDetails.date, "dd MMMM yyyy, HH:mm", {
@@ -1913,7 +1859,7 @@ export default function POSPage() {
                   })}
               </div>
 
-              <div className="text-muted-foreground">Total:</div>
+              <div className="text-muted-foreground">Total :</div>
               <div className="font-medium">
                 {transactionDetails?.total &&
                   new Intl.NumberFormat("id-ID", {
@@ -1923,12 +1869,12 @@ export default function POSPage() {
                   }).format(transactionDetails.total)}
               </div>
 
-              <div className="text-muted-foreground">Metode Pembayaran:</div>
+              <div className="text-muted-foreground">Metode Pembayaran :</div>
               <div className="font-medium">
                 {transactionDetails?.paymentMethod}
               </div>
 
-              <div className="text-muted-foreground">Dibayar:</div>
+              <div className="text-muted-foreground">Dibayar :</div>
               <div className="font-medium">
                 {cashAmount &&
                   new Intl.NumberFormat("id-ID", {
@@ -1938,7 +1884,7 @@ export default function POSPage() {
                   }).format(cashAmount)}
               </div>
 
-              <div className="text-muted-foreground">Kembalian:</div>
+              <div className="text-muted-foreground">Kembalian :</div>
               <div className="font-medium">
                 {changeAmount &&
                   new Intl.NumberFormat("id-ID", {
@@ -1952,59 +1898,14 @@ export default function POSPage() {
 
           <DialogFooter className="flex flex-col sm:flex-row gap-2">
             <Button
-              variant="outline"
               className="w-full sm:w-auto"
               onClick={() => handleFinishTransaction(false)}
             >
               Selesai
             </Button>
-            <Button
-              className="w-full sm:w-auto flex items-center gap-2"
-              onClick={() => handleFinishTransaction(true)}
-            >
-              <Printer className="h-4 w-4" />
-              Cetak & Selesai
-            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      {/* Komponen Struk untuk Cetak (Tersembunyi) */}
-      <div style={{ display: "none" }}>
-        <PrintReceipt
-          ref={printReceiptRef}
-          data={{
-            id: transactionDetails?.id || transactionId,
-            tanggal: transactionDetails?.date || new Date(),
-            kasir: user?.fullName || "",
-            pelanggan: selectedCustomer
-              ? {
-                  nama: selectedCustomer.name,
-                  alamat: selectedCustomer.address,
-                  telepon: selectedCustomer.phone,
-                }
-              : undefined,
-            items: cart.map((item) => ({
-              nama: item.name,
-              harga: item.price,
-              jumlah: item.quantity,
-              diskon: item.discount,
-              subtotal: item.subtotal,
-            })),
-            subtotal: getCalculationDetails().subtotal,
-            diskonTransaksi: getCalculationDetails().discountAmount,
-            biayaPengiriman: deliveryFee,
-            pajak: getCalculationDetails().taxAmount,
-            total: getCalculationDetails().total,
-            metodePembayaran: payments
-              .filter((p) => p.status === "SUCCESS")
-              .map((p) => p.method)
-              .join(" & "),
-            referensiPembayaran: payments.find((p) => p.midtransToken)
-              ?.midtransToken,
-          }}
-        />
-      </div>
     </div>
   );
 }
