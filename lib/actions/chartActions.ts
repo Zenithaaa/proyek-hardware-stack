@@ -31,16 +31,16 @@ export async function getRevenueChartData(
 
     const transactions = await prisma.transaksiPenjualan.findMany({
       where: {
-        tanggalTransaksi: {
+        tanggalWaktuTransaksi: {
           gte: startOfDay(startDate),
           lte: endOfDay(now), // Include transactions up to the end of today
         },
       },
       orderBy: {
-        tanggalTransaksi: "asc",
+        tanggalWaktuTransaksi: "asc",
       },
       select: {
-        tanggalTransaksi: true,
+        tanggalWaktuTransaksi: true,
         grandTotal: true,
       },
     });
@@ -63,7 +63,7 @@ export async function getRevenueChartData(
     }
 
     transactions.forEach((transaction) => {
-      const dateStr = format(transaction.tanggalTransaksi, "yyyy-MM-dd");
+      const dateStr = format(transaction.tanggalWaktuTransaksi, "yyyy-MM-dd");
       const currentRevenue = dailyRevenueMap.get(dateStr) || 0;
       dailyRevenueMap.set(
         dateStr,

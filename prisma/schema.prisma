@@ -21,10 +21,17 @@ model Kategori {
 model Supplier {
   id            Int         @id @default(autoincrement()) @map("IdSupplier")
   nama          String      @map("NamaSupplier") @db.VarChar(100)
+  namaKontak    String?     @map("NamaKontakSupplier") @db.VarChar(100)
   alamat        String?     @map("AlamatSupplier") @db.Text
   noTelp        String?     @map("NoTelpSupplier") @db.VarChar(20)
   email         String?     @map("EmailSupplier") @db.VarChar(100)
-  createdAt DateTime? @default(now()) @map("createdAt")
+  kota          String?     @map("KotaSupplier") @db.VarChar(100)
+  kodePos       String?     @map("KodePosSupplier") @db.VarChar(10)
+  npwp          String?     @map("NPWPSupplier") @db.VarChar(30)
+  noRekening    String?     @map("NoRekeningSupplier") @db.VarChar(30)
+  namaBank      String?     @map("NamaBankSupplier") @db.VarChar(50)
+  catatan       String?     @map("CatatanSupplier") @db.Text
+  createdAt     DateTime?   @default(now()) @map("createdAt")
   items         Item[]
   pembelian     PembelianKeSupplier[]
 

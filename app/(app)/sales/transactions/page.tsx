@@ -11,7 +11,15 @@ import {
   Eye,
   Search,
   FilterX,
+  X,
 } from "lucide-react";
+import {
+  IconChevronDown,
+  IconChevronLeft,
+  IconChevronRight,
+  IconChevronsLeft,
+  IconChevronsRight,
+} from "@tabler/icons-react";
 import { useForm } from "react-hook-form";
 import * as XLSX from "xlsx";
 
@@ -50,7 +58,16 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogClose,
+} from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
+import { ChartAreaInteractive } from "@/components/chart-area-interactive";
+import { Label } from "@/components/ui/label";
 
 type Transaction = {
   id: string;
@@ -74,6 +91,9 @@ type TransactionResponse = {
     totalRevenue: number;
     transactionCount: number;
     averagePerTransaction: number;
+    revenueChangePercent?: number;
+    transactionCountChangePercent?: number;
+    averagePerTransactionChangePercent?: number;
   };
 };
 
@@ -86,6 +106,9 @@ export default function TransactionsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [meta, setMeta] = useState<TransactionResponse["meta"] | null>(null);
+  const [selectedTransaction, setSelectedTransaction] =
+    useState<Transaction | null>(null);
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
 
   // State untuk filter
   const [fromDate, setFromDate] = useState<Date | undefined>(undefined);
@@ -205,9 +228,9 @@ export default function TransactionsPage() {
     setLoading(true);
     try {
       const response = await fetch(`/api/sales/transactions`, {
-        method: 'PATCH',
+        method: "PATCH",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
         body: JSON.stringify({ id: id, statusTransaksi: status }),
       });
@@ -215,15 +238,14 @@ export default function TransactionsPage() {
       const data = await response.json();
 
       if (!data.success) {
-        throw new Error(data.error || 'Gagal memperbarui status transaksi');
+        throw new Error(data.error || "Gagal memperbarui status transaksi");
       }
 
       // Muat ulang data setelah berhasil update
       fetchTransactions();
-
     } catch (err: any) {
-      setError(err.message || 'Terjadi kesalahan saat memperbarui status');
-      console.error('Error updating transaction status:', err);
+      setError(err.message || "Terjadi kesalahan saat memperbarui status");
+      console.error("Error updating transaction status:", err);
       setLoading(false); // Hentikan loading jika terjadi error
     }
   };
@@ -255,11 +277,15 @@ export default function TransactionsPage() {
     status: string,
     type: "payment" | "transaction"
   ) => {
-    let variant: "default" | "secondary" | "destructive" | "outline" =
-      "default";
+    let variant:
+      | "default"
+      | "secondary"
+      | "destructive"
+      | "outline"
+      | "success" = "default";
 
     if (type === "payment") {
-      if (status === "Lunas") variant = "default";
+      if (status === "Lunas") variant = "success";
       else variant = "destructive";
     } else {
       if (status === "Selesai") variant = "default";
@@ -270,19 +296,105 @@ export default function TransactionsPage() {
     return <Badge variant={variant}>{status}</Badge>;
   };
 
+  // Fungsi untuk mencetak transaksi sebagai PDF
+  const printTransactionPDF = (transaction: Transaction) => {
+    // Buat elemen HTML untuk dicetak
+    const printWindow = window.open("", "_blank");
+    if (!printWindow) return;
+
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>Struk Transaksi - ${transaction.nomorStruk}</title>
+          <style>
+            body { font-family: Arial, sans-serif; margin: 20px; }
+            h1 { font-size: 18px; text-align: center; }
+            .info-row { display: flex; margin-bottom: 8px; }
+            .info-label { width: 150px; font-weight: bold; }
+            .info-value { flex: 1; }
+            table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+            th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+            th { background-color: #f2f2f2; }
+          </style>
+        </head>
+        <body>
+          <h1>Detail Transaksi - ${transaction.nomorStruk}</h1>
+          
+          <div class="info-row">
+            <div class="info-label">Nomor Struk:</div>
+            <div class="info-value">${transaction.nomorStruk}</div>
+          </div>
+          
+          <div class="info-row">
+            <div class="info-label">Tanggal & Waktu:</div>
+            <div class="info-value">${format(
+              new Date(transaction.tanggalWaktuTransaksi),
+              "dd MMM yyyy HH:mm",
+              { locale: id }
+            )}</div>
+          </div>
+          
+          <div class="info-row">
+            <div class="info-label">Pelanggan:</div>
+            <div class="info-value">${transaction.namaPelanggan}</div>
+          </div>
+          
+          <div class="info-row">
+            <div class="info-label">Total:</div>
+            <div class="info-value">${formatCurrency(
+              transaction.pendapatan
+            )}</div>
+          </div>
+          
+          <div class="info-row">
+            <div class="info-label">Status Pembayaran:</div>
+            <div class="info-value">${transaction.statusPembayaran}</div>
+          </div>
+          
+          <div class="info-row">
+            <div class="info-label">Status Transaksi:</div>
+            <div class="info-value">${transaction.statusTransaksi}</div>
+          </div>
+          
+          <div class="info-row">
+            <div class="info-label">Metode Pembayaran:</div>
+            <div class="info-value">${transaction.metodePembayaran}</div>
+          </div>
+        </body>
+      </html>
+    `);
+
+    printWindow.document.close();
+    printWindow.focus();
+    setTimeout(() => {
+      printWindow.print();
+      printWindow.close();
+    }, 500);
+  };
+
   return (
     <div className="container mx-auto py-6 space-y-6">
       {/* Header & Ringkasan */}
       <div className="flex flex-col gap-4">
-        <h1 className="text-3xl font-bold">Daftar Transaksi Penjualan</h1>
+        <h1 className="text-3xl font-bold ms-5">Daftar Transaksi Penjualan</h1>
 
         {/* Kartu Ringkasan KPI */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 m-5">
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">
                 Total Penjualan
               </CardTitle>
+              {meta?.revenueChangePercent !== undefined && (
+                <Badge
+                  variant={
+                    meta.revenueChangePercent >= 0 ? "default" : "destructive"
+                  }
+                >
+                  {meta.revenueChangePercent >= 0 ? "↑" : "↓"}{" "}
+                  {meta.revenueChangePercent.toFixed(1)}%
+                </Badge>
+              )}
             </CardHeader>
             <CardContent>
               {loading ? (
@@ -300,6 +412,18 @@ export default function TransactionsPage() {
               <CardTitle className="text-sm font-medium text-muted-foreground">
                 Jumlah Transaksi
               </CardTitle>
+              {meta?.transactionCountChangePercent !== undefined && (
+                <Badge
+                  variant={
+                    meta.transactionCountChangePercent >= 0
+                      ? "default"
+                      : "destructive"
+                  }
+                >
+                  {meta.transactionCountChangePercent >= 0 ? "↑" : "↓"}{" "}
+                  {meta.transactionCountChangePercent.toFixed(1)}%
+                </Badge>
+              )}
             </CardHeader>
             <CardContent>
               {loading ? (
@@ -317,6 +441,18 @@ export default function TransactionsPage() {
               <CardTitle className="text-sm font-medium text-muted-foreground">
                 Rata-Rata per Transaksi
               </CardTitle>
+              {meta?.averagePerTransactionChangePercent !== undefined && (
+                <Badge
+                  variant={
+                    meta.averagePerTransactionChangePercent >= 0
+                      ? "default"
+                      : "destructive"
+                  }
+                >
+                  {meta.averagePerTransactionChangePercent >= 0 ? "↑" : "↓"}{" "}
+                  {meta.averagePerTransactionChangePercent.toFixed(1)}%
+                </Badge>
+              )}
             </CardHeader>
             <CardContent>
               {loading ? (
@@ -331,8 +467,13 @@ export default function TransactionsPage() {
         </div>
       </div>
 
+      {/* Chart Area Interactive */}
+      <div className="m-5">
+        <ChartAreaInteractive />
+      </div>
+
       {/* Area Filter & Pencarian */}
-      <div className="bg-card rounded-lg border p-4 space-y-4">
+      <div className="bg-card rounded-lg border p-4 space-y-4 m-5">
         <h2 className="text-lg font-semibold">Filter Transaksi</h2>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -411,8 +552,8 @@ export default function TransactionsPage() {
             </div>
           </div>
 
-          {/* Filter Status Pembayaran */}
-          <div className="flex flex-col space-y-2">
+          {/* Filter Status Pembayaran - Hidden */}
+          <div className="hidden">
             <label className="text-sm font-medium">Status Pembayaran</label>
             <Select value={paymentStatus} onValueChange={setPaymentStatus}>
               <SelectTrigger>
@@ -427,8 +568,8 @@ export default function TransactionsPage() {
             </Select>
           </div>
 
-          {/* Filter Status Transaksi */}
-          <div className="flex flex-col space-y-2">
+          {/* Filter Status Transaksi - Hidden */}
+          <div className="hidden">
             <label className="text-sm font-medium">Status Transaksi</label>
             <Select
               value={transactionStatus}
@@ -442,24 +583,6 @@ export default function TransactionsPage() {
                 <SelectItem value="completed">Selesai</SelectItem>
                 <SelectItem value="pending">Tertahan</SelectItem>
                 <SelectItem value="cancelled">Dibatalkan</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Filter Metode Pembayaran */}
-          <div className="flex flex-col space-y-2">
-            <label className="text-sm font-medium">Metode Pembayaran</label>
-            <Select value={paymentMethod} onValueChange={setPaymentMethod}>
-              <SelectTrigger>
-                <SelectValue placeholder="Semua Metode" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Semua Metode</SelectItem>
-                <SelectItem value="GOPAY">GoPay</SelectItem>
-                <SelectItem value="BANK_TRANSFER">Transfer Bank</SelectItem>
-                <SelectItem value="CREDIT_CARD">Kartu Kredit</SelectItem>
-                <SelectItem value="QRIS">QRIS</SelectItem>
-                <SelectItem value="TUNAI">Tunai</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -488,7 +611,7 @@ export default function TransactionsPage() {
       </div>
 
       {/* Tabel Data Transaksi */}
-      <div className="bg-card rounded-lg border overflow-hidden">
+      <div className="bg-card rounded-lg border overflow-hidden m-5">
         <div className="overflow-x-auto">
           <Table>
             <TableHeader>
@@ -578,9 +701,10 @@ export default function TransactionsPage() {
                         <Button
                           variant="ghost"
                           size="icon"
-                          onClick={() =>
-                            router.push(`/sales/transactions/${transaction.id}`)
-                          }
+                          onClick={() => {
+                            setSelectedTransaction(transaction);
+                            setIsPreviewOpen(true);
+                          }}
                           title="Lihat Detail"
                         >
                           <Eye className="h-4 w-4" />
@@ -590,22 +714,33 @@ export default function TransactionsPage() {
                           <Button
                             variant="ghost"
                             size="icon"
-                            onClick={() => handleUpdateStatus(transaction.id, "SELESAI")}
+                            onClick={() =>
+                              handleUpdateStatus(transaction.id, "SELESAI")
+                            }
                             title="Ubah Status Menjadi Selesai"
                           >
                             {/* Ganti ikon sesuai kebutuhan, contoh: CheckCircle */}
-                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-check-circle"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="m9 11 3 3L22 4"/></svg>
+                            <svg
+                              xmlns="http://www.w3.org/2000/svg"
+                              width="20"
+                              height="20"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              stroke-width="2"
+                              stroke-linecap="round"
+                              stroke-linejoin="round"
+                              class="lucide lucide-check-circle"
+                            >
+                              <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+                              <path d="m9 11 3 3L22 4" />
+                            </svg>
                           </Button>
                         )}
                         <Button
                           variant="ghost"
                           size="icon"
-                          onClick={() =>
-                            window.open(
-                              `/api/transactions/${transaction.id}/print`,
-                              "_blank"
-                            )
-                          }
+                          onClick={() => printTransactionPDF(transaction)}
                           title="Cetak Struk"
                         >
                           <Printer className="h-4 w-4" />
@@ -621,127 +756,140 @@ export default function TransactionsPage() {
 
         {/* Kontrol Paginasi */}
         {!loading && !error && meta && meta.totalPages > 0 && (
-          <div className="p-4 border-t">
-            <Pagination>
-              <PaginationContent>
-                <PaginationItem>
-                  <PaginationPrevious
-                    href="#"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      if (meta.page > 1) handlePageChange(meta.page - 1);
-                    }}
-                    className={
-                      meta.page <= 1 ? "pointer-events-none opacity-50" : ""
-                    }
-                  />
-                </PaginationItem>
-
-                {/* Render halaman pertama */}
-                {meta.page > 2 && (
-                  <PaginationItem>
-                    <PaginationLink
-                      href="#"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        handlePageChange(1);
-                      }}
-                    >
-                      1
-                    </PaginationLink>
-                  </PaginationItem>
-                )}
-
-                {/* Render ellipsis jika perlu */}
-                {meta.page > 3 && (
-                  <PaginationItem>
-                    <PaginationEllipsis />
-                  </PaginationItem>
-                )}
-
-                {/* Render halaman sebelumnya jika tidak di halaman pertama */}
-                {meta.page > 1 && (
-                  <PaginationItem>
-                    <PaginationLink
-                      href="#"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        handlePageChange(meta.page - 1);
-                      }}
-                    >
-                      {meta.page - 1}
-                    </PaginationLink>
-                  </PaginationItem>
-                )}
-
-                {/* Halaman saat ini */}
-                <PaginationItem>
-                  <PaginationLink
-                    href="#"
-                    isActive
-                    onClick={(e) => e.preventDefault()}
-                  >
-                    {meta.page}
-                  </PaginationLink>
-                </PaginationItem>
-
-                {/* Render halaman berikutnya jika tidak di halaman terakhir */}
-                {meta.page < meta.totalPages && (
-                  <PaginationItem>
-                    <PaginationLink
-                      href="#"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        handlePageChange(meta.page + 1);
-                      }}
-                    >
-                      {meta.page + 1}
-                    </PaginationLink>
-                  </PaginationItem>
-                )}
-
-                {/* Render ellipsis jika perlu */}
-                {meta.page < meta.totalPages - 2 && (
-                  <PaginationItem>
-                    <PaginationEllipsis />
-                  </PaginationItem>
-                )}
-
-                {/* Render halaman terakhir */}
-                {meta.page < meta.totalPages - 1 && (
-                  <PaginationItem>
-                    <PaginationLink
-                      href="#"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        handlePageChange(meta.totalPages);
-                      }}
-                    >
-                      {meta.totalPages}
-                    </PaginationLink>
-                  </PaginationItem>
-                )}
-
-                <PaginationItem>
-                  <PaginationNext
-                    href="#"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      if (meta.page < meta.totalPages)
-                        handlePageChange(meta.page + 1);
-                    }}
-                    className={
-                      meta.page >= meta.totalPages
-                        ? "pointer-events-none opacity-50"
-                        : ""
-                    }
-                  />
-                </PaginationItem>
-              </PaginationContent>
-            </Pagination>
+          <div className="flex items-center justify-between px-4 py-4 border-t">
+            <div className="text-muted-foreground hidden flex-1 text-sm lg:flex">
+              {meta
+                ? `${
+                    meta.page > 0 ? (meta.page - 1) * pageSize + 1 : 0
+                  } - ${Math.min(meta.page * pageSize, meta.totalCount)} dari ${
+                    meta.totalCount
+                  } transaksi`
+                : "0 of 0 row(s) selected."}
+            </div>
+            <div className="flex w-full items-center gap-8 lg:w-fit">
+              <div className="flex items-center gap-2">
+                <Label htmlFor="rows-per-page" className="text-sm font-medium">
+                  Rows per page
+                </Label>
+                <Select
+                  value={`${pageSize}`}
+                  onValueChange={(value) => {
+                    setPageSize(Number(value));
+                    setCurrentPage(1); // Reset ke halaman pertama saat mengubah ukuran halaman
+                  }}
+                >
+                  <SelectTrigger size="sm" className="w-20" id="rows-per-page">
+                    <SelectValue placeholder={pageSize} />
+                  </SelectTrigger>
+                  <SelectContent side="top">
+                    {[10, 20, 30, 40, 50].map((size) => (
+                      <SelectItem key={size} value={`${size}`}>
+                        {size}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex w-fit items-center justify-center text-sm font-medium">
+                Page {meta.page} of {meta.totalPages}
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={() => handlePageChange(1)}
+                  disabled={meta.page <= 1}
+                >
+                  <IconChevronsLeft className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={() => handlePageChange(meta.page - 1)}
+                  disabled={meta.page <= 1}
+                >
+                  <IconChevronLeft className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={() => handlePageChange(meta.page + 1)}
+                  disabled={meta.page >= meta.totalPages}
+                >
+                  <IconChevronRight className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={() => handlePageChange(meta.totalPages)}
+                  disabled={meta.page >= meta.totalPages}
+                >
+                  <IconChevronsRight className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
           </div>
         )}
       </div>
+
+      {/* Dialog Preview Transaksi */}
+      <Dialog open={isPreviewOpen} onOpenChange={setIsPreviewOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Detail Transaksi</DialogTitle>
+            <DialogClose className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground">
+              <X className="h-4 w-4" />
+              <span className="sr-only">Close</span>
+            </DialogClose>
+          </DialogHeader>
+          {selectedTransaction && (
+            <div className="grid gap-4 py-4">
+              <div className="grid grid-cols-4 items-center gap-4">
+                <div className="font-medium">Nomor Struk:</div>
+                <div className="col-span-3">
+                  {selectedTransaction.nomorStruk}
+                </div>
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <div className="font-medium">Pelanggan:</div>
+                <div className="col-span-3">
+                  {selectedTransaction.namaPelanggan}
+                </div>
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <div className="font-medium">Total:</div>
+                <div className="col-span-3">
+                  {formatCurrency(selectedTransaction.pendapatan)}
+                </div>
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <div className="font-medium">Status Pembayaran:</div>
+                <div className="col-span-3">
+                  {renderStatusBadge(
+                    selectedTransaction.statusPembayaran,
+                    "payment"
+                  )}
+                </div>
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <div className="font-medium">Status Transaksi:</div>
+                <div className="col-span-3">
+                  {renderStatusBadge(
+                    selectedTransaction.statusTransaksi,
+                    "transaction"
+                  )}
+                </div>
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <div className="font-medium">Metode Pembayaran:</div>
+                <div className="col-span-3">
+                  {selectedTransaction.metodePembayaran}
+                </div>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

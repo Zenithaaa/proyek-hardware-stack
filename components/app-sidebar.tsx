@@ -74,7 +74,7 @@ const data = {
         },
         {
           title: "Penyesuaian Stok",
-          url: "#",
+          url: "/inventory/stock-adjustments",
         },
       ],
     },
@@ -85,7 +85,7 @@ const data = {
       items: [
         {
           title: "Daftar Supplier",
-          url: "#",
+          url: "/purchases/suppliers",
         },
         {
           title: "Pesanan Pembelian (PO)",

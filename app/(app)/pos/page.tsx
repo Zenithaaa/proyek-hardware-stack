@@ -9,6 +9,8 @@ import { format } from "date-fns";
 import { id } from "date-fns/locale";
 import { toast } from "sonner";
 import Script from "next/script";
+import { jsPDF } from "jspdf";
+import autoTable from "jspdf-autotable";
 
 // Shadcn Components
 import {
@@ -144,6 +146,80 @@ export default function POSPage() {
   const [heldTransactions, setHeldTransactions] = useState<any[]>([]);
   const printReceiptRef = useRef<HTMLDivElement>(null);
 
+  // Fungsi untuk mencetak alamat pengiriman sebagai PDF
+  const printShippingAddress = () => {
+    try {
+      // Validasi data pengiriman
+      if (!deliveryAddress || !deliveryCity) {
+        toast.error("Alamat dan kota pengiriman harus diisi");
+        return;
+      }
+
+      // Buat dokumen PDF
+      const doc = new jsPDF();
+
+      // Tambahkan judul
+      doc.setFontSize(16);
+      doc.text("ALAMAT PENGIRIMAN", 105, 20, { align: "center" });
+
+      // Tambahkan informasi pelanggan jika ada
+      if (selectedCustomer) {
+        doc.setFontSize(12);
+        doc.text(`Pelanggan: ${selectedCustomer.name}`, 20, 35);
+      }
+
+      // Tambahkan informasi pengiriman
+      doc.setFontSize(14);
+      doc.text("Detail Pengiriman:", 20, 45);
+
+      // Buat tabel informasi pengiriman
+      const tableData = [
+        ["Alamat", deliveryAddress],
+        ["Kota", deliveryCity],
+        ["Kode Pos", deliveryPostalCode || "-"],
+        ["No. Telp Penerima", deliveryRecipientPhone || "-"],
+        ["Catatan", deliveryNote || "-"],
+      ];
+
+      // Posisi Y awal untuk teks setelah tabel
+      let finalY = 50;
+
+      autoTable(doc, {
+        startY: 50,
+        head: [],
+        body: tableData,
+        theme: "plain",
+        styles: { fontSize: 12 },
+        columnStyles: {
+          0: { fontStyle: "bold", cellWidth: 40 },
+          1: { cellWidth: 150 },
+        },
+        didDrawPage: (data) => {
+          // Simpan posisi Y akhir dari tabel
+          finalY = data.cursor.y;
+        },
+      });
+
+      // Tambahkan tanggal dan ID transaksi
+      const currentDate = format(new Date(), "dd MMMM yyyy, HH:mm", {
+        locale: id,
+      });
+      doc.setFontSize(10);
+
+      // Gunakan finalY yang sudah disimpan, atau gunakan nilai default jika tidak tersedia
+      // Tambahkan margin 15 untuk jarak dari tabel
+      doc.text(`Dicetak pada: ${currentDate}`, 20, finalY + 15);
+      doc.text(`ID Transaksi: ${transactionId}`, 20, finalY + 25);
+
+      // Buka PDF di tab baru dan cetak
+      window.open(URL.createObjectURL(doc.output("blob")));
+      toast.success("PDF alamat pengiriman berhasil dibuat");
+    } catch (error) {
+      console.error("Error printing shipping address:", error);
+      toast.error("Gagal mencetak alamat pengiriman");
+    }
+  };
+
   const resetTransactionState = () => {
     setCart([]);
     setSelectedCustomer(null);
@@ -227,6 +303,9 @@ export default function POSPage() {
     };
 
     loadSavedState();
+
+    // Muat daftar barang saat komponen dimuat
+    fetchAllItems();
   }, []);
 
   const generateNewTransactionId = async () => {
@@ -323,6 +402,32 @@ export default function POSPage() {
     };
   };
 
+  // State untuk daftar semua barang dan pagination
+  const [allItems, setAllItems] = useState<any[]>([]);
+  const [isLoadingAllItems, setIsLoadingAllItems] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(12);
+
+  // Fungsi untuk mengambil semua barang
+  const fetchAllItems = async (page = 1) => {
+    setIsLoadingAllItems(true);
+    try {
+      const response = await fetch(
+        `/api/items/all?page=${page}&limit=${itemsPerPage}`
+      );
+      const data = await response.json();
+      setAllItems(data.items);
+      setTotalPages(data.pagination.totalPages);
+      setCurrentPage(data.pagination.page);
+    } catch (error) {
+      toast.error("Gagal memuat daftar barang");
+      console.error(error);
+    } finally {
+      setIsLoadingAllItems(false);
+    }
+  };
+
   // Fungsi pencarian barang
   const searchItems = async (query: string) => {
     if (!query.trim()) {
@@ -341,6 +446,14 @@ export default function POSPage() {
       console.error(error);
     } finally {
       setIsSearching(false);
+    }
+  };
+
+  // Fungsi untuk mengubah halaman
+  const handlePageChange = (newPage: number) => {
+    if (newPage >= 1 && newPage <= totalPages) {
+      setCurrentPage(newPage);
+      fetchAllItems(newPage);
     }
   };
 
@@ -1076,7 +1189,7 @@ export default function POSPage() {
       {/* Header & Informasi Sesi */}
       <Card>
         <CardHeader>
-          <div className="flex justify-between items-center">
+          <div className="flex flex-col space-y-4">
             <div>
               <CardTitle>Point of Sale</CardTitle>
               <CardDescription>
@@ -1084,18 +1197,26 @@ export default function POSPage() {
                 {format(new Date(), "dd MMMM yyyy, HH.mm", { locale: id })}
               </CardDescription>
             </div>
-            <div className="flex flex-col sm:flex-row gap-2">
-              <Button variant="outline" onClick={generateNewTransactionId}>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                className="w-full sm:w-auto"
+                variant="outline"
+                onClick={generateNewTransactionId}
+              >
                 <FilePlus2 className="mr-2 h-4 w-4" />
                 Transaksi Baru
               </Button>
-              <Button variant="outline" onClick={holdTransaction}>
+              <Button
+                className="w-full sm:w-auto"
+                variant="outline"
+                onClick={holdTransaction}
+              >
                 <PauseCircle className="mr-2 h-4 w-4" />
                 Tahan Transaksi
               </Button>
               <Dialog>
                 <DialogTrigger asChild>
-                  <Button variant="outline">
+                  <Button className="w-full sm:w-auto" variant="outline">
                     <PlayCircle className="mr-2 h-4 w-4" />
                     Panggil Transaksi
                   </Button>
@@ -1146,7 +1267,10 @@ export default function POSPage() {
               </Dialog>
               <AlertDialog>
                 <AlertDialogTrigger asChild>
-                  <Button variant="outline" className="text-destructive">
+                  <Button
+                    variant="outline"
+                    className="text-destructive w-full sm:w-auto"
+                  >
                     <XCircle className="mr-2 h-4 w-4" />
                     Batalkan
                   </Button>
@@ -1182,16 +1306,16 @@ export default function POSPage() {
       {/* Area Pelanggan */}
       <Card>
         <CardHeader>
-          <div className="flex justify-between items-center">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
             <div className="flex items-center gap-2">
               <Badge variant={selectedCustomer ? "default" : "secondary"}>
                 {selectedCustomer ? selectedCustomer.name : "Pelanggan Umum"}
               </Badge>
             </div>
-            <div className="flex flex-col sm:flex-row gap-2">
+            <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
               <Dialog>
                 <DialogTrigger asChild>
-                  <Button variant="outline">
+                  <Button variant="outline" className="w-full sm:w-auto">
                     <Users className="mr-2 h-4 w-4" />
                     Cari Pelanggan
                   </Button>
@@ -1264,6 +1388,7 @@ export default function POSPage() {
                 <Button
                   variant="outline"
                   onClick={() => setSelectedCustomer(null)}
+                  className="w-full sm:w-auto"
                 >
                   <UserX className="mr-2 h-4 w-4" />
                   Hapus Pelanggan
@@ -1330,6 +1455,17 @@ export default function POSPage() {
                   placeholder="Tambahkan catatan untuk kurir"
                 />
               </div>
+              <div className="mt-4">
+                <Button
+                  type="submit"
+                  className="w-full"
+                  onClick={() => printShippingAddress()}
+                  disabled={!deliveryAddress || !deliveryCity}
+                >
+                  <Printer className="mr-2 h-4 w-4" />
+                  Cetak Alamat Pengiriman
+                </Button>
+              </div>
             </div>
           )}
         </CardContent>
@@ -1351,43 +1487,83 @@ export default function POSPage() {
                 searchItems(e.target.value);
               }}
             />
-            <ScrollArea className="h-[300px] overflow-x-auto overflow-y-auto">
-              {isSearching ? (
-                <div className="flex items-center justify-center py-4">
-                  <span className="text-muted-foreground">
-                    Mencari barang...
-                  </span>
-                </div>
-              ) : searchResults.length > 0 ? (
-                <div className="space-y-2">
-                  {searchResults.map((item) => (
-                    <div
-                      key={item.id}
-                      className="flex items-center justify-between p-2 hover:bg-accent rounded-lg cursor-pointer"
-                      onClick={() => addToCart(item)}
-                    >
-                      <div>
-                        <p className="font-medium">{item.nama}</p>
-                        <p className="text-sm text-muted-foreground">
-                          Stok: {item.stok} {item.satuan || "Pcs"}
+            {/* Tampilan hasil pencarian */}
+            {searchQuery ? (
+              <div className="h-[300px] overflow-x-auto overflow-y-auto">
+                {isSearching ? (
+                  <div className="flex items-center justify-center py-4">
+                    <span className="text-muted-foreground">
+                      Mencari barang...
+                    </span>
+                  </div>
+                ) : searchResults.length > 0 ? (
+                  <div className="space-y-2">
+                    {searchResults.map((item) => (
+                      <div
+                        key={item.id}
+                        className="flex items-center justify-between p-2 hover:bg-accent rounded-lg cursor-pointer"
+                        onClick={() => addToCart(item)}
+                      >
+                        <div>
+                          <p className="font-medium">{item.nama}</p>
+                          <p className="text-sm text-muted-foreground">
+                            Stok: {item.stok} {item.satuan || "Pcs"}
+                          </p>
+                        </div>
+                        <p className="font-medium">
+                          {new Intl.NumberFormat("id-ID", {
+                            style: "currency",
+                            currency: "IDR",
+                            maximumFractionDigits: 0,
+                          }).format(item.hargaJual)}
                         </p>
                       </div>
-                      <p className="font-medium">
-                        {new Intl.NumberFormat("id-ID", {
-                          style: "currency",
-                          currency: "IDR",
-                          maximumFractionDigits: 0,
-                        }).format(item.hargaJual)}
-                      </p>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-4 text-muted-foreground">
+                    Tidak ada barang yang ditemukan
+                  </div>
+                )}
+              </div>
+            ) : (
+              /* Tampilan Grid Barang */
+              <div className="mt-2">
+                <div className="max-h-[400px] overflow-y-auto border rounded-md">
+                  {isLoadingAllItems ? (
+                    <div className="flex items-center justify-center py-8">
+                      <span className="text-muted-foreground">
+                        Memuat daftar barang...
+                      </span>
                     </div>
-                  ))}
+                  ) : allItems.length > 0 ? (
+                    <div className="divide-y divide-border">
+                      {allItems.map((item) => (
+                        <div
+                          key={item.id}
+                          className="flex items-center justify-between p-3 hover:bg-accent rounded-sm cursor-pointer"
+                          onClick={() => addToCart(item)}
+                        >
+                          <div>
+                            <p className="font-medium">{item.nama}</p>
+                            <p className="text-sm text-muted-foreground">
+                              Stok: {item.stok} {item.satuan || "Pcs"}
+                            </p>
+                          </div>
+                          <p className="font-medium">
+                            {formatCurrency(item.hargaJual)}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-8 text-muted-foreground">
+                      Tidak ada barang yang tersedia
+                    </div>
+                  )}
                 </div>
-              ) : searchQuery ? (
-                <div className="text-center py-4 text-muted-foreground">
-                  Tidak ada barang yang ditemukan
-                </div>
-              ) : null}
-            </ScrollArea>
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -1396,7 +1572,7 @@ export default function POSPage() {
             <CardTitle>Keranjang Belanja</CardTitle>
           </CardHeader>
           <CardContent>
-            <ScrollArea className="h-[300px] overflow-x-auto overflow-y-auto">
+            <div className="overflow-x-auto overflow-y-auto rounded-md border">
               {cart.length > 0 ? (
                 <Table>
                   <TableHeader>
@@ -1457,10 +1633,10 @@ export default function POSPage() {
                 <div className="text-center py-8 text-muted-foreground">
                   Keranjang belanja masih kosong.
                   <br />
-                  Silakan scan atau cari barang.
+                  Silakan cari kode atau cari nama barang.
                 </div>
               )}
-            </ScrollArea>
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -1478,7 +1654,9 @@ export default function POSPage() {
                 id="discount"
                 type="number"
                 value={discountPercent}
-                onChange={(e) => setDiscountPercent(Number(e.target.value))}
+                onChange={(e) =>
+                  setDiscountPercent(Math.min(Number(e.target.value), 100))
+                }
                 min="0"
                 max="100"
                 placeholder="0"
@@ -1491,7 +1669,9 @@ export default function POSPage() {
                 min={0}
                 max={100}
                 value={taxPercent}
-                onChange={(e) => setTaxPercent(Number(e.target.value))}
+                onChange={(e) =>
+                  setTaxPercent(Math.min(Number(e.target.value), 100))
+                }
               />
             </div>
             {needDelivery && (
@@ -1537,24 +1717,24 @@ export default function POSPage() {
             <span>Total</span>
             <span>Rp {getCalculationDetails().total.toLocaleString()}</span>
           </div>
-          <Tabs defaultValue="cash" className="w-full">
-            <TabsList className="grid w-full grid-cols-4">
+          <Tabs defaultValue="cash" className="w-full grid-cols-2">
+            <TabsList className="grid w-full grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-1">
               <TabsTrigger value="cash">Tunai</TabsTrigger>
               <TabsTrigger value="debit_credit" disabled>
                 Kartu Debit/Kredit
-                <Badge variant="outline" className="ml-2">
+                <Badge variant="outline" className="ml-2 hidden sm:inline-flex">
                   Segera Hadir
                 </Badge>
               </TabsTrigger>
               <TabsTrigger value="qris" disabled>
                 QRIS
-                <Badge variant="outline" className="ml-2">
+                <Badge variant="outline" className="ml-2 hidden sm:inline-flex">
                   Segera Hadir
                 </Badge>
               </TabsTrigger>
               <TabsTrigger value="e_wallet" disabled>
                 E-Wallet
-                <Badge variant="outline" className="ml-2">
+                <Badge variant="outline" className="ml-2 hidden sm:inline-flex">
                   Segera Hadir
                 </Badge>
               </TabsTrigger>

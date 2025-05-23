@@ -137,23 +137,17 @@ export async function GET(request: Request) {
         "-", // Ambil metode dari pembayaran sukses pertama
     }));
 
-    // Hitung total pendapatan berdasarkan filter yang diterapkan
+    // Hitung total pendapatan berdasarkan filter yang diterapkan (semua transaksi)
     const totalRevenue = await prisma.transaksiPenjualan.aggregate({
-      where: {
-        ...where,
-        statusPembayaran: "PAID_VIA_MIDTRANS", // Hanya hitung transaksi yang sudah lunas
-      },
+      where: where, // Gunakan filter yang sama tanpa batasan status pembayaran
       _sum: {
         grandTotal: true,
       },
     });
 
-    // Hitung jumlah transaksi berdasarkan filter yang diterapkan
+    // Hitung jumlah transaksi berdasarkan filter yang diterapkan (semua transaksi)
     const transactionCount = await prisma.transaksiPenjualan.count({
-      where: {
-        ...where,
-        statusPembayaran: "PAID_VIA_MIDTRANS", // Hanya hitung transaksi yang sudah lunas
-      },
+      where: where, // Gunakan filter yang sama tanpa batasan status pembayaran
     });
 
     // Hitung rata-rata per transaksi
@@ -161,6 +155,125 @@ export async function GET(request: Request) {
       transactionCount > 0
         ? (totalRevenue._sum.grandTotal?.toNumber() || 0) / transactionCount
         : 0;
+
+    // Hitung persentase perubahan untuk KPI
+    // Buat filter untuk periode sebelumnya (dengan rentang waktu yang sama)
+    let previousWhere: Prisma.TransaksiPenjualanWhereInput = {};
+
+    if (fromDate && toDate) {
+      // Jika ada rentang tanggal, hitung periode sebelumnya dengan durasi yang sama
+      const currentFrom = new Date(fromDate);
+      const currentTo = new Date(toDate);
+      const durationMs = currentTo.getTime() - currentFrom.getTime();
+
+      const previousFrom = new Date(currentFrom.getTime() - durationMs);
+      const previousTo = new Date(currentFrom.getTime() - 1); // 1ms sebelum periode saat ini
+
+      previousWhere.tanggalWaktuTransaksi = {
+        gte: previousFrom,
+        lte: previousTo,
+      };
+    } else {
+      // Jika tidak ada rentang tanggal, bandingkan dengan bulan sebelumnya
+      const currentDate = new Date();
+      const firstDayCurrentMonth = new Date(
+        currentDate.getFullYear(),
+        currentDate.getMonth(),
+        1
+      );
+      const lastDayPreviousMonth = new Date(firstDayCurrentMonth.getTime() - 1);
+      const firstDayPreviousMonth = new Date(
+        lastDayPreviousMonth.getFullYear(),
+        lastDayPreviousMonth.getMonth(),
+        1
+      );
+
+      previousWhere.tanggalWaktuTransaksi = {
+        gte: firstDayPreviousMonth,
+        lte: lastDayPreviousMonth,
+      };
+    }
+
+    // Tambahkan filter lain yang sama dengan filter saat ini (kecuali tanggal)
+    if (paymentStatus && paymentStatus !== "all") {
+      let dbPaymentStatus;
+      if (paymentStatus === "paid") dbPaymentStatus = "PAID_VIA_MIDTRANS";
+      else if (paymentStatus === "pending")
+        dbPaymentStatus = "PENDING_PAYMENT_GATEWAY";
+      else if (paymentStatus === "failed") dbPaymentStatus = "DIBATALKAN";
+
+      if (dbPaymentStatus) {
+        previousWhere.statusPembayaran = dbPaymentStatus;
+      }
+    }
+
+    if (transactionStatus && transactionStatus !== "all") {
+      let dbTransactionStatus;
+      if (transactionStatus === "completed") dbTransactionStatus = "SELESAI";
+      else if (transactionStatus === "pending")
+        dbTransactionStatus = "TERTAHAN";
+      else if (transactionStatus === "cancelled")
+        dbTransactionStatus = "DIBATALKAN";
+
+      if (dbTransactionStatus) {
+        previousWhere.statusTransaksi = dbTransactionStatus;
+      }
+    }
+
+    if (paymentMethod && paymentMethod !== "all") {
+      previousWhere.pembayaranTransaksi = {
+        some: {
+          metodePembayaran: {
+            contains: paymentMethod.toUpperCase(),
+            mode: "insensitive",
+          },
+          statusDetailPembayaran: "SUCCESS",
+        },
+      };
+    }
+
+    if (userId) {
+      previousWhere.userId = userId;
+    }
+
+    // Ambil data periode sebelumnya
+    const previousTotalRevenue = await prisma.transaksiPenjualan.aggregate({
+      where: previousWhere,
+      _sum: {
+        grandTotal: true,
+      },
+    });
+
+    const previousTransactionCount = await prisma.transaksiPenjualan.count({
+      where: previousWhere,
+    });
+
+    const previousAveragePerTransaction =
+      previousTransactionCount > 0
+        ? (previousTotalRevenue._sum.grandTotal?.toNumber() || 0) /
+          previousTransactionCount
+        : 0;
+
+    // Hitung persentase perubahan
+    const calculatePercentageChange = (current: number, previous: number) => {
+      if (previous === 0) return current > 0 ? 100 : 0;
+      return ((current - previous) / previous) * 100;
+    };
+
+    const revenueChangePercent = calculatePercentageChange(
+      totalRevenue._sum.grandTotal?.toNumber() || 0,
+      previousTotalRevenue._sum.grandTotal?.toNumber() || 0
+    );
+
+    const transactionCountChangePercent = calculatePercentageChange(
+      transactionCount,
+      previousTransactionCount
+    );
+
+    const averagePerTransactionChangePercent = calculatePercentageChange(
+      averagePerTransaction,
+      previousAveragePerTransaction
+    );
 
     return NextResponse.json({
       success: true,
@@ -173,6 +286,13 @@ export async function GET(request: Request) {
         totalRevenue: totalRevenue._sum.grandTotal?.toNumber() || 0,
         transactionCount,
         averagePerTransaction,
+        revenueChangePercent: parseFloat(revenueChangePercent.toFixed(1)),
+        transactionCountChangePercent: parseFloat(
+          transactionCountChangePercent.toFixed(1)
+        ),
+        averagePerTransactionChangePercent: parseFloat(
+          averagePerTransactionChangePercent.toFixed(1)
+        ),
       },
     });
   } catch (error: any) {
