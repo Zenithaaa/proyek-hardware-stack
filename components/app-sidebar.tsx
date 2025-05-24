@@ -89,11 +89,11 @@ const data = {
         },
         {
           title: "Pesanan Pembelian (PO)",
-          url: "#",
+          url: "/purchases/orders",
         },
         {
           title: "Penerimaan Barang",
-          url: "#",
+          url: "/purchases/receipts",
         },
       ],
     },
@@ -104,7 +104,7 @@ const data = {
       items: [
         {
           title: "Daftar Pelanggan",
-          url: "#",
+          url: "/customers",
         },
       ],
     },
@@ -115,11 +115,11 @@ const data = {
       items: [
         {
           title: "Laporan Penjualan",
-          url: "#",
+          url: "/reports/sales-summary",
         },
         {
           title: "Laporan Stok",
-          url: "#",
+          url: "/reports/inventory-status",
         },
         {
           title: "Laporan Laba Rugi",

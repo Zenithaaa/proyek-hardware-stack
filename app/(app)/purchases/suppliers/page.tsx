@@ -43,6 +43,10 @@ export default function SuppliersPage() {
     alamat?: string | null;
     noTelp?: string | null;
     email?: string | null;
+    namaKontak?: string | null;
+    kota?: string | null;
+    kodePos?: string | null;
+    catatan?: string | null;
   } | null>(null);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [supplierToDelete, setSupplierToDelete] = useState<{
@@ -154,7 +158,7 @@ export default function SuppliersPage() {
   return (
     <div className="container py-6 space-y-6">
       {/* Header & Main Actions */}
-      <div className="flex justify-between items-center">
+      <div className="flex mx-5 justify-between items-center">
         <h1 className="text-2xl font-bold">Manajemen Supplier</h1>
         <Button onClick={() => setIsFormOpen(true)}>
           <PlusCircle className="mr-2 h-4 w-4" />
@@ -163,7 +167,7 @@ export default function SuppliersPage() {
       </div>
 
       {/* Search & Filter Area */}
-      <div className="flex items-center space-x-2 w-full max-w-sm">
+      <div className="flex ml-5 items-center space-x-2 w-full max-w-sm">
         <Input
           placeholder="Cari Supplier..."
           value={searchQuery}
@@ -176,7 +180,7 @@ export default function SuppliersPage() {
       </div>
 
       {/* Suppliers Table */}
-      <div className="border rounded-md">
+      <div className="border m-5 rounded-md">
         <Table>
           <TableHeader>
             <TableRow>
@@ -186,51 +190,49 @@ export default function SuppliersPage() {
               <TableHead>No. Telepon</TableHead>
               <TableHead>Email</TableHead>
               <TableHead>Kota</TableHead>
+              <TableHead>Kode Pos</TableHead>
+              <TableHead>Alamat Lengkap</TableHead>
+              <TableHead>Catatan Tambahan</TableHead>
               <TableHead className="w-24 text-right">Aksi</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {suppliers.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={7} className="text-center py-6">
-                  Tidak ada data supplier ditemukan
+            {suppliers.map((supplier, index) => (
+              <TableRow key={supplier.id}>
+                <TableCell>{(currentPage - 1) * 10 + index + 1}</TableCell>
+                <TableCell>{supplier.nama}</TableCell>
+                <TableCell>{supplier.namaKontak}</TableCell>
+                <TableCell>{supplier.noTelp}</TableCell>
+                <TableCell>{supplier.email}</TableCell>
+                <TableCell>{supplier.kota}</TableCell>
+                <TableCell>{supplier.kodePos}</TableCell>
+                <TableCell>{supplier.alamat}</TableCell>
+                <TableCell>{supplier.catatan}</TableCell>
+                <TableCell className="text-right">
+                  <div className="flex items-center justify-end space-x-2">
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={() => handleEditSupplier(supplier)}
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={() =>
+                        handleDeleteClick({
+                          id: supplier.id,
+                          nama: supplier.nama,
+                        })
+                      }
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </TableCell>
               </TableRow>
-            ) : (
-              suppliers.map((supplier, index) => (
-                <TableRow key={supplier.id}>
-                  <TableCell>{(currentPage - 1) * 10 + index + 1}</TableCell>
-                  <TableCell className="font-medium">{supplier.nama}</TableCell>
-                  <TableCell>{supplier.namaKontak || "-"}</TableCell>
-                  <TableCell>{supplier.noTelp || "-"}</TableCell>
-                  <TableCell>{supplier.email || "-"}</TableCell>
-                  <TableCell>{supplier.kota || "-"}</TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex justify-end space-x-2">
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        onClick={() => handleEditSupplier(supplier)}
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        onClick={() =>
-                          handleDeleteClick({
-                            id: supplier.id,
-                            nama: supplier.nama,
-                          })
-                        }
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))
-            )}
+            ))}
           </TableBody>
         </Table>
       </div>
@@ -280,7 +282,7 @@ export default function SuppliersPage() {
         open={isDeleteDialogOpen}
         onOpenChange={setIsDeleteDialogOpen}
       >
-        <AlertDialogContent>
+        <AlertDialogContent className="max-w-md">
           <AlertDialogHeader>
             <AlertDialogTitle>Konfirmasi Hapus Supplier</AlertDialogTitle>
             <AlertDialogDescription>

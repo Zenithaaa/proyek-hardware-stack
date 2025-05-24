@@ -72,3 +72,34 @@ export async function PUT(request: Request) {
     return NextResponse.json({ error: errorMessage }, { status: 500 });
   }
 }
+
+// Menghapus kategori
+export async function DELETE(request: Request) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const id = searchParams.get("id");
+
+    if (!id) {
+      return NextResponse.json(
+        { error: "ID kategori diperlukan" },
+        { status: 400 }
+      );
+    }
+
+    await prisma.kategori.delete({
+      where: { id: parseInt(id, 10) },
+    });
+
+    return NextResponse.json(
+      { message: "Kategori berhasil dihapus" },
+      { status: 200 }
+    );
+  } catch (error) {
+    console.error("Error deleting category:", error);
+    let errorMessage = "Gagal menghapus kategori";
+    if (error instanceof Error) {
+      errorMessage = error.message;
+    }
+    return NextResponse.json({ error: errorMessage }, { status: 500 });
+  }
+}

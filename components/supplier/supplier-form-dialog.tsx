@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
@@ -43,6 +43,10 @@ type SupplierFormDialogProps = {
     alamat?: string | null;
     noTelp?: string | null;
     email?: string | null;
+    namaKontak?: string | null;
+    kota?: string | null;
+    kodePos?: string | null;
+    catatan?: string | null;
   };
   onSuccess?: () => void;
 };
@@ -60,18 +64,24 @@ export function SupplierFormDialog({
     resolver: zodResolver(supplierSchema),
     defaultValues: {
       nama: supplier?.nama || "",
-      namaKontak: "",
+      namaKontak: supplier?.namaKontak || "",
       noTelp: supplier?.noTelp || "",
       email: supplier?.email || "",
       alamat: supplier?.alamat || "",
-      kota: "",
-      kodePos: "",
-      npwp: "",
-      noRekening: "",
-      namaBank: "",
-      catatan: "",
+      kota: supplier?.kota || "",
+      kodePos: supplier?.kodePos || "",
+      catatan: supplier?.catatan || "",
     },
   });
+
+  // Reset form when supplier prop changes (for edit mode)
+  useEffect(() => {
+    if (supplier) {
+      form.reset(supplier);
+    } else {
+      form.reset(); // Reset to empty when adding new supplier
+    }
+  }, [supplier, form]);
 
   async function onSubmit(data: SupplierFormValues) {
     setIsSubmitting(true);
@@ -114,7 +124,7 @@ export function SupplierFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[600px]">
+      <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto mx-4 md:mx-auto">
         <DialogHeader>
           <DialogTitle>
             {isEditMode
@@ -145,8 +155,6 @@ export function SupplierFormDialog({
                   </FormItem>
                 )}
               />
-
-              {/* Nama Kontak Person */}
               <FormField
                 control={form.control}
                 name="namaKontak"
@@ -160,8 +168,9 @@ export function SupplierFormDialog({
                   </FormItem>
                 )}
               />
+            </div>
 
-              {/* Nomor Telepon */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <FormField
                 control={form.control}
                 name="noTelp"
@@ -169,18 +178,12 @@ export function SupplierFormDialog({
                   <FormItem>
                     <FormLabel>Nomor Telepon</FormLabel>
                     <FormControl>
-                      <Input
-                        type="tel"
-                        placeholder="Masukkan nomor telepon"
-                        {...field}
-                      />
+                      <Input placeholder="Masukkan nomor telepon" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
-
-              {/* Email */}
               <FormField
                 control={form.control}
                 name="email"
@@ -188,18 +191,15 @@ export function SupplierFormDialog({
                   <FormItem>
                     <FormLabel>Email</FormLabel>
                     <FormControl>
-                      <Input
-                        type="email"
-                        placeholder="Masukkan email"
-                        {...field}
-                      />
+                      <Input placeholder="Masukkan email" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
+            </div>
 
-              {/* Kota */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <FormField
                 control={form.control}
                 name="kota"
@@ -213,8 +213,6 @@ export function SupplierFormDialog({
                   </FormItem>
                 )}
               />
-
-              {/* Kode Pos */}
               <FormField
                 control={form.control}
                 name="kodePos"
@@ -228,54 +226,10 @@ export function SupplierFormDialog({
                   </FormItem>
                 )}
               />
-
-              {/* NPWP */}
-              <FormField
-                control={form.control}
-                name="npwp"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>NPWP</FormLabel>
-                    <FormControl>
-                      <Input placeholder="Masukkan NPWP" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              {/* Nomor Rekening */}
-              <FormField
-                control={form.control}
-                name="noRekening"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Nomor Rekening</FormLabel>
-                    <FormControl>
-                      <Input placeholder="Masukkan nomor rekening" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              {/* Nama Bank */}
-              <FormField
-                control={form.control}
-                name="namaBank"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Nama Bank</FormLabel>
-                    <FormControl>
-                      <Input placeholder="Masukkan nama bank" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
             </div>
 
-            {/* Alamat Lengkap */}
+            {/* Removed NPWP, Nomor Rekening, Nama Bank Fields */}
+
             <FormField
               control={form.control}
               name="alamat"
@@ -285,8 +239,8 @@ export function SupplierFormDialog({
                   <FormControl>
                     <Textarea
                       placeholder="Masukkan alamat lengkap"
-                      className="resize-none"
                       {...field}
+                      value={field.value || ""}
                     />
                   </FormControl>
                   <FormMessage />
@@ -294,18 +248,17 @@ export function SupplierFormDialog({
               )}
             />
 
-            {/* Catatan Tambahan */}
             <FormField
               control={form.control}
-              name="catatan"
+              name="catatanTambahan"
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Catatan Tambahan</FormLabel>
                   <FormControl>
                     <Textarea
                       placeholder="Masukkan catatan tambahan"
-                      className="resize-none"
                       {...field}
+                      value={field.value || ""}
                     />
                   </FormControl>
                   <FormMessage />
@@ -314,15 +267,8 @@ export function SupplierFormDialog({
             />
 
             <DialogFooter>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => onOpenChange(false)}
-              >
-                Batal
-              </Button>
-              <Button type="submit" disabled={isSubmitting}>
-                {isSubmitting ? "Menyimpan..." : "Simpan Supplier"}
+              <Button type="submit" disabled={form.formState.isSubmitting}>
+                {supplier ? "Simpan Perubahan" : "Tambah Supplier"}
               </Button>
             </DialogFooter>
           </form>

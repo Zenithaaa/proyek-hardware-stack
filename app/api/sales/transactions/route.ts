@@ -124,11 +124,12 @@ export async function GET(request: Request) {
       tanggalWaktuTransaksi: tx.tanggalWaktuTransaksi.toISOString(),
       namaPelanggan: tx.pelanggan?.nama || "-", // Handle kasus tanpa pelanggan
       pendapatan: tx.grandTotal.toNumber(), // Konversi Decimal ke Number
+      // This will be replaced with statusDetailPembayaran from PembayaranTransaksi
       statusPembayaran:
-        tx.statusPembayaran === "PAID_VIA_MIDTRANS" ? "Lunas" : "Tidak Lunas", // Sesuaikan mapping status
+        tx.pembayaranTransaksi[0]?.statusDetailPembayaran || "BELUM_DIBAYAR", // Use statusDetailPembayaran from the first successful payment
       statusTransaksi:
         tx.statusTransaksi === "SELESAI"
-          ? "Selesai"
+          ? "SELESAI"
           : tx.statusTransaksi === "TERTAHAN"
           ? "Tertahan"
           : "Dibatalkan", // Sesuaikan mapping status

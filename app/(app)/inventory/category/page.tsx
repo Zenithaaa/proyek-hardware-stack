@@ -52,6 +52,7 @@ const formSchema = z.object({
 
 export default function CategoryPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false); // Add state for delete loading
   const [editingCategory, setEditingCategory] = useState<null | {
     id: string;
     nama: string;
@@ -115,6 +116,30 @@ export default function CategoryPage() {
       );
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleDelete = async (categoryId: string) => {
+    try {
+      setIsDeleting(true); // Set deleting state
+      const res = await fetch(`/api/inventory/categories?id=${categoryId}`, {
+        method: "DELETE",
+      });
+
+      if (!res.ok) {
+        throw new Error("Gagal menghapus kategori");
+      }
+
+      await queryClient.invalidateQueries({ queryKey: ["categories"] });
+      toast.success("Kategori berhasil dihapus");
+    } catch (error) {
+      console.error("Error deleting category:", error);
+      toast.error(
+        "Gagal menghapus kategori: " +
+          (error instanceof Error ? error.message : "Terjadi kesalahan")
+      );
+    } finally {
+      setIsDeleting(false); // Reset deleting state
     }
   };
 
@@ -278,6 +303,7 @@ export default function CategoryPage() {
                         <AlertDialogCancel>Batal</AlertDialogCancel>
                         <AlertDialogAction
                           onClick={() => handleDelete(category.id)}
+                          disabled={isDeleting} // Disable button while deleting
                         >
                           Hapus
                         </AlertDialogAction>

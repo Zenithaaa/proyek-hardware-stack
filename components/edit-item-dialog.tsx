@@ -219,14 +219,19 @@ export function EditItemDialog({
                     <FormLabel>Harga Beli</FormLabel>
                     <FormControl>
                       <Input
-                        type="number"
+                        type="text"
                         placeholder="Masukkan harga beli"
                         {...field}
-                        onChange={(e) =>
-                          field.onChange(
-                            e.target.value ? Number(e.target.value) : null
-                          )
+                        value={
+                          field.value ? field.value.toLocaleString("id-ID") : ""
                         }
+                        onChange={(e) => {
+                          const rawValue = e.target.value.replace(/\./g, "");
+                          const numberValue = rawValue
+                            ? parseInt(rawValue, 10)
+                            : null;
+                          field.onChange(numberValue);
+                        }}
                       />
                     </FormControl>
                     <FormMessage />
@@ -242,14 +247,19 @@ export function EditItemDialog({
                     <FormLabel>Harga Jual</FormLabel>
                     <FormControl>
                       <Input
-                        type="number"
+                        type="text"
                         placeholder="Masukkan harga jual"
                         {...field}
-                        onChange={(e) =>
-                          field.onChange(
-                            e.target.value ? Number(e.target.value) : undefined
-                          )
+                        value={
+                          field.value ? field.value.toLocaleString("id-ID") : ""
                         }
+                        onChange={(e) => {
+                          const rawValue = e.target.value.replace(/\./g, "");
+                          const numberValue = rawValue
+                            ? parseInt(rawValue, 10)
+                            : undefined;
+                          field.onChange(numberValue);
+                        }}
                       />
                     </FormControl>
                     <FormMessage />

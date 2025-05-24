@@ -114,13 +114,13 @@ export async function GET(
         jumlah: true,
         transaksi: {
           select: {
-            tanggalTransaksi: true,
+            tanggalWaktuTransaksi: true,
           },
         },
       },
       orderBy: {
         transaksi: {
-          tanggalTransaksi: "asc",
+          tanggalWaktuTransaksi: "asc",
         },
       },
     });
@@ -128,14 +128,14 @@ export async function GET(
     const aggregatedSales: Record<string, number> = {};
 
     salesRecords.forEach((record) => {
-      if (!record.transaksi || !record.transaksi.tanggalTransaksi) {
+      if (!record.transaksi || !record.transaksi.tanggalWaktuTransaksi) {
         console.warn(
           "Skipping sales record due to missing transaction date:",
           record
         );
         return;
       }
-      const saleDate = new Date(record.transaksi.tanggalTransaksi);
+      const saleDate = new Date(record.transaksi.tanggalWaktuTransaksi);
       let label = "";
 
       switch (period) {

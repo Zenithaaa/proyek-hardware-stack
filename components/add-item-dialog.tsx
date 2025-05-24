@@ -202,9 +202,19 @@ export function AddItemDialog({
                   <FormItem>
                     <FormLabel>Harga Beli</FormLabel>
                     <Input
-                      type="number"
+                      type="text"
                       placeholder="Masukkan harga beli"
                       {...field}
+                      value={
+                        field.value ? field.value.toLocaleString("id-ID") : ""
+                      }
+                      onChange={(e) => {
+                        const rawValue = e.target.value.replace(/\./g, "");
+                        const numberValue = rawValue
+                          ? parseInt(rawValue, 10)
+                          : null;
+                        field.onChange(numberValue);
+                      }}
                     />
                   </FormItem>
                 )}
@@ -217,9 +227,19 @@ export function AddItemDialog({
                   <FormItem>
                     <FormLabel>Harga Jual</FormLabel>
                     <Input
-                      type="number"
+                      type="text"
                       placeholder="Masukkan harga jual"
                       {...field}
+                      value={
+                        field.value ? field.value.toLocaleString("id-ID") : ""
+                      }
+                      onChange={(e) => {
+                        const rawValue = e.target.value.replace(/\./g, "");
+                        const numberValue = rawValue
+                          ? parseInt(rawValue, 10)
+                          : undefined;
+                        field.onChange(numberValue);
+                      }}
                     />
                   </FormItem>
                 )}

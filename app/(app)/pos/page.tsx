@@ -1718,21 +1718,25 @@ export default function POSPage() {
             <span>Rp {getCalculationDetails().total.toLocaleString()}</span>
           </div>
           <Tabs defaultValue="cash" className="w-full grid-cols-2">
-            <TabsList className="grid w-full grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-1">
+            <TabsList className="grid w-full grid-cols-1 lg:grid-cols-4 gap-1">
               <TabsTrigger value="cash">Tunai</TabsTrigger>
-              <TabsTrigger value="debit_credit" disabled>
+              <TabsTrigger
+                value="debit_credit"
+                disabled
+                className="hidden lg:flex"
+              >
                 Kartu Debit/Kredit
                 <Badge variant="outline" className="ml-2 hidden sm:inline-flex">
                   Segera Hadir
                 </Badge>
               </TabsTrigger>
-              <TabsTrigger value="qris" disabled>
+              <TabsTrigger value="qris" disabled className="hidden lg:flex">
                 QRIS
                 <Badge variant="outline" className="ml-2 hidden sm:inline-flex">
                   Segera Hadir
                 </Badge>
               </TabsTrigger>
-              <TabsTrigger value="e_wallet" disabled>
+              <TabsTrigger value="e_wallet" disabled className="hidden lg:flex">
                 E-Wallet
                 <Badge variant="outline" className="ml-2 hidden sm:inline-flex">
                   Segera Hadir

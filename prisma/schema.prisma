@@ -27,15 +27,85 @@ model Supplier {
   email         String?     @map("EmailSupplier") @db.VarChar(100)
   kota          String?     @map("KotaSupplier") @db.VarChar(100)
   kodePos       String?     @map("KodePosSupplier") @db.VarChar(10)
-  npwp          String?     @map("NPWPSupplier") @db.VarChar(30)
-  noRekening    String?     @map("NoRekeningSupplier") @db.VarChar(30)
-  namaBank      String?     @map("NamaBankSupplier") @db.VarChar(50)
   catatan       String?     @map("CatatanSupplier") @db.Text
   createdAt     DateTime?   @default(now()) @map("createdAt")
   items         Item[]
   pembelian     PembelianKeSupplier[]
+  penerimaanBarangHeader PenerimaanBarangHeader[] // Added missing relation field
 
   @@map("tbl_supplier")
+}
+
+// Tambahkan model-model ini ke dalam file schema.prisma Anda
+
+// --- Tabel Header untuk setiap dokumen penerimaan barang ---
+model PenerimaanBarangHeader {
+  id                      String    @id @default(cuid())
+  nomorDokumen            String    @unique // Nomor dokumen penerimaan internal Anda, bisa di-generate
+  tanggalPenerimaan       DateTime  @default(now())
+
+  // Relasi ke Purchase Order (Opsional, karena bisa ada penerimaan tanpa PO)
+  pembelianKeSupplierId   Int?
+  pembelianKeSupplier     PembelianKeSupplier? @relation(fields: [pembelianKeSupplierId], references: [id])
+
+  // Relasi ke Supplier (Wajib, dari siapa barang diterima)
+  supplierId              Int
+  supplier                Supplier  @relation(fields: [supplierId], references: [id])
+
+  nomorSuratJalanSupplier String?   // Nomor surat jalan dari supplier jika ada
+  userIdPenerima          String    // ID User (dari Clerk) yang mencatat penerimaan ini
+  // Jika Anda punya tabel User lokal yang sinkron dengan Clerk:
+  // userPenerima            User?     @relation(fields: [userIdPenerima], references: [clerkId]) // atau field ID User lokal Anda
+
+  catatan                 String?   @db.Text // Catatan tambahan untuk penerimaan ini
+  // Status penerimaan keseluruhan dokumen, misal terkait kelengkapan terhadap PO
+  statusPenerimaan        String?   @default("DIPROSES") // Contoh: "DIPROSES", "SELESAI_SEBAGIAN_PO", "SELESAI_LENGKAP_PO", "TANPA_PO_SELESAI"
+
+  // Relasi ke detail item yang diterima
+  detailPenerimaanBarang  PenerimaanBarangDetail[]
+
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
+
+  @@index([pembelianKeSupplierId])
+  @@index([supplierId])
+  @@index([userIdPenerima])
+  @@index([tanggalPenerimaan])
+}
+
+// --- Tabel Detail untuk setiap item barang yang diterima dalam satu dokumen penerimaan ---
+model PenerimaanBarangDetail {
+  id                          String    @id @default(cuid())
+
+  // Relasi ke Header Penerimaan Barang
+  penerimaanBarangHeaderId    String
+  penerimaanBarangHeader      PenerimaanBarangHeader @relation(fields: [penerimaanBarangHeaderId], references: [id], onDelete: Cascade) // Jika header dihapus, detail ikut terhapus
+
+  // Relasi ke Item yang diterima
+  itemId                      Int
+  item                        Item      @relation(fields: [itemId], references: [id])
+
+  // Relasi ke Detail Purchase Order (Opsional, untuk melacak item PO mana yang diterima)
+  // Ini membantu jika Anda ingin tahu berapa banyak dari item spesifik di PO tersebut yang sudah diterima.
+  detailPembelianKeSupplierId Int?
+  detailPembelianKeSupplier   DetailPembelianKeSupplier? @relation(fields: [detailPembelianKeSupplierId], references: [id], onDelete: SetNull)
+
+  jumlahDiterima              Int       // Kuantitas barang yang diterima dalam satuan item
+  hargaBeliSaatTerima         Decimal?  @db.Decimal(12, 2) // Harga beli aktual saat penerimaan (bisa beda dari PO jika ada perubahan)
+
+  // Field tambahan yang mungkin berguna tergantung jenis barang
+  nomorBatch                  String?
+  tanggalKadaluarsa           DateTime?
+  lokasiGudang              String?   // Jika Anda punya manajemen lokasi gudang
+
+  keteranganItem              String?   @db.Text // Catatan spesifik untuk item ini saat diterima
+
+  createdAt                   DateTime  @default(now())
+  updatedAt                   DateTime  @updatedAt
+
+  @@index([penerimaanBarangHeaderId])
+  @@index([itemId])
+  @@index([detailPembelianKeSupplierId])
 }
 
 model SesiKasir {
@@ -72,6 +142,7 @@ model Item {
   detailTransaksi DetailTransaksiPenjualan[]
   detailPembelian DetailPembelianKeSupplier[]
   penyesuaianStok PenyesuaianStok[]
+  detailPenerimaanBarang PenerimaanBarangDetail[]
 
   @@index([nama], map: "idx_item_nama")
   @@index([kodeBarcode], map: "idx_item_barcode")
@@ -224,6 +295,7 @@ model PembelianKeSupplier {
   catatan           String?   @db.Text
   supplier          Supplier  @relation(fields: [supplierId], references: [id])
   detailPembelian   DetailPembelianKeSupplier[]
+  penerimaanBarangHeader PenerimaanBarangHeader[] // Added missing relation field
 
   @@map("tbl_pembelian_ke_supplier")
 }
@@ -239,6 +311,8 @@ model DetailPembelianKeSupplier {
   pembelian       PembelianKeSupplier @relation(fields: [pembelianId], references: [id])
   item            Item      @relation(fields: [itemId], references: [id])
 
+  penerimaanBarangDetail PenerimaanBarangDetail[]
+
   @@map("tbl_detail_pembelian_ke_supplier")
 }
 
@@ -246,7 +320,7 @@ model PenyesuaianStok {
   id                Int       @id @default(autoincrement()) @map("IdPenyesuaian")
   nomorReferensi    String?   @unique @map("NomorReferensi") @db.VarChar(50)
   itemId            Int       @map("ItemId")
-  userId            Int       @map("IdUser")
+  item              Item      @relation(fields: [itemId], references: [id])
   tanggal           DateTime  @default(now()) @map("TanggalPenyesuaian")
   jenisPenyesuaian  String    @map("JenisPenyesuaian") @db.VarChar(20)
   tipeOperasi       String    @map("TipeOperasi") @db.VarChar(10)
@@ -254,7 +328,12 @@ model PenyesuaianStok {
   stokSebelum       Int       @map("StokSebelum")
   stokSesudah       Int       @map("StokSesudah")
   keterangan        String?   @db.Text
-  item              Item      @relation(fields: [itemId], references: [id])
+  tanggalPenyesuaian  DateTime  @default(now())
+  
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
 
   @@map("tbl_penyesuaian_stok")
+  @@index([itemId])
+
 }

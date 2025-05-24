@@ -284,16 +284,41 @@ export default function TransactionsPage() {
       | "outline"
       | "success" = "default";
 
+    let displayText = status; // Default display text is the status itself
+
     if (type === "payment") {
-      if (status === "Lunas") variant = "success";
-      else variant = "destructive";
-    } else {
-      if (status === "Selesai") variant = "default";
-      else if (status === "Tertahan") variant = "secondary";
-      else variant = "destructive";
+      if (status === "SUCCESS") {
+        variant = "success";
+        displayText = "Lunas"; // Display "SUCCESS" for paid status
+      } else {
+        variant = "destructive";
+        displayText = "Tidak Lunas"; // Display "Tidak Lunas" for any status other than SUCCESS
+      }
+    } else if (type === "transaction") {
+      if (status === "SELESAI") {
+        variant = "default"; // Change variant to default for black/dark color
+        displayText = "Selesai"; // Display "SELESAI" for completed transaction status
+      } else if (status === "Tertahan") {
+        variant = "secondary";
+        displayText = "Tertahan";
+      } else {
+        variant = "destructive";
+        displayText = status; // Display original status for other transaction statuses
+      }
     }
 
-    return <Badge variant={variant}>{status}</Badge>;
+    // Add a class for slightly larger font size and bold font for both success payment and completed transaction badges
+    const className =
+      (type === "payment" && status === "SUCCESS") ||
+      (type === "transaction" && status === "SELESAI")
+        ? "text-sm font-semibold"
+        : "";
+
+    return (
+      <Badge variant={variant} className={className}>
+        {displayText}
+      </Badge>
+    );
   };
 
   // Fungsi untuk mencetak transaksi sebagai PDF
