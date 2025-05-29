@@ -42,6 +42,7 @@ import {
 } from "@/components/ui/popover";
 import { CalendarIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 
 type Supplier = {
   id: string;
@@ -109,6 +110,7 @@ export default function NewReceiptPage() {
     handleSubmit,
     setValue,
     watch,
+    reset, // Add reset here
     formState: { errors },
   } = useForm<ReceiptFormData>({
     defaultValues: {
@@ -132,13 +134,13 @@ export default function NewReceiptPage() {
   // Fungsi untuk memuat data supplier
   const fetchSuppliers = async () => {
     try {
-      // Simulasi data untuk demo
-      const mockSuppliers: Supplier[] = [
-        { id: "1", nama: "PT Supplier Utama" },
-        { id: "2", nama: "CV Maju Jaya" },
-        { id: "3", nama: "UD Berkah Abadi" },
-      ];
-      setSuppliers(mockSuppliers);
+      const response = await fetch("/api/purchases/suppliers");
+      const data = await response.json();
+      if (data.success) {
+        setSuppliers(data.data);
+      } else {
+        setError(data.error || "Gagal memuat data supplier");
+      }
     } catch (err: any) {
       console.error("Error fetching suppliers:", err);
       setError("Gagal memuat data supplier");
@@ -148,22 +150,15 @@ export default function NewReceiptPage() {
   // Fungsi untuk memuat data PO berdasarkan supplier
   const fetchPurchaseOrders = async (supplierId: string) => {
     try {
-      // Simulasi data untuk demo
-      const mockPOs: PurchaseOrder[] = [
-        {
-          id: "1",
-          nomorPO: "PO-2023-001",
-          tanggalPembelian: "2023-06-10T00:00:00Z",
-          idSupplier: "1",
-        },
-        {
-          id: "2",
-          nomorPO: "PO-2023-002",
-          tanggalPembelian: "2023-06-12T00:00:00Z",
-          idSupplier: "2",
-        },
-      ];
-      setPurchaseOrders(mockPOs.filter((po) => po.idSupplier === supplierId));
+      const response = await fetch(
+        `/api/purchases/orders/by-supplier/${supplierId}`
+      );
+      const data = await response.json();
+      if (data.success) {
+        setPurchaseOrders(data.data);
+      } else {
+        setError(data.error || "Gagal memuat data pesanan pembelian");
+      }
     } catch (err: any) {
       console.error("Error fetching purchase orders:", err);
       setError("Gagal memuat data pesanan pembelian");
@@ -173,13 +168,13 @@ export default function NewReceiptPage() {
   // Fungsi untuk memuat data item untuk penerimaan tanpa PO
   const fetchItems = async () => {
     try {
-      // Simulasi data untuk demo
-      const mockItems: Item[] = [
-        { id: "1", nama: "Paku 2 Inch", kode: "PKU-001", satuan: "Kg" },
-        { id: "2", nama: "Semen Portland", kode: "SMN-001", satuan: "Sak" },
-        { id: "3", nama: "Cat Tembok", kode: "CAT-001", satuan: "Kaleng" },
-      ];
-      setItems(mockItems);
+      const response = await fetch("/api/inventory/items");
+      const data = await response.json();
+      if (data.success) {
+        setItems(data.data);
+      } else {
+        setError(data.error || "Gagal memuat data barang");
+      }
     } catch (err: any) {
       console.error("Error fetching items:", err);
       setError("Gagal memuat data barang");
@@ -189,41 +184,24 @@ export default function NewReceiptPage() {
   // Fungsi untuk memuat detail item PO
   const fetchPOItems = async (poId: string) => {
     try {
-      // Simulasi data untuk demo
-      const mockPOItems: POItem[] = [
-        {
-          id: "1",
-          idItem: "1",
-          namaItem: "Paku 2 Inch",
-          kodeItem: "PKU-001",
-          jumlahDipesan: 100,
-          jumlahDiterima: 0,
-          satuan: "Kg",
-          hargaBeli: 15000,
-        },
-        {
-          id: "2",
-          idItem: "2",
-          namaItem: "Semen Portland",
-          kodeItem: "SMN-001",
-          jumlahDipesan: 50,
-          jumlahDiterima: 0,
-          satuan: "Sak",
-          hargaBeli: 60000,
-        },
-      ];
-      setPOItems(mockPOItems);
+      const response = await fetch(`/api/purchases/orders/${poId}/items`);
+      const data = await response.json();
+      if (data.success) {
+        setPOItems(data.data);
 
-      // Isi form dengan item PO
-      setValue(
-        "items",
-        mockPOItems.map((item) => ({
-          idItem: item.idItem,
-          jumlahDiterima: 0,
-          hargaBeliSaatTerima: item.hargaBeli,
-          idDetailPembelian: item.id,
-        }))
-      );
+        // Isi form dengan item PO
+        setValue(
+          "items",
+          data.data.map((item: POItem) => ({
+            idItem: item.idItem,
+            jumlahDiterima: 0,
+            hargaBeliSaatTerima: item.hargaBeli,
+            idDetailPembelian: item.id,
+          }))
+        );
+      } else {
+        setError(data.error || "Gagal memuat detail pesanan pembelian");
+      }
     } catch (err: any) {
       console.error("Error fetching PO items:", err);
       setError("Gagal memuat detail pesanan pembelian");
@@ -234,25 +212,37 @@ export default function NewReceiptPage() {
 
   // Efek untuk memuat data awal
   useEffect(() => {
-    fetchSuppliers();
-    fetchItems();
+    const fetchData = async () => {
+      await fetchSuppliers();
+      await fetchItems();
 
-    // Jika ada poId, muat data PO
-    if (poId) {
-      // Simulasi mendapatkan supplier ID dari PO
-      const mockPO = {
-        id: poId,
-        idSupplier: "1", // Supplier ID dari PO
-      };
+      if (poId) {
+        // Fetch PO details to get supplier ID
+        try {
+          const response = await fetch(`/api/purchases/orders/${poId}`);
+          const poData = await response.json();
+          if (poData.success && poData.data) {
+            const supplierIdFromPO = poData.data.idSupplier;
+            setValue("idSupplier", supplierIdFromPO);
+            setValue("idPembelian", poId);
+            setIsPOBased(true);
+            fetchPOItems(poId);
+          } else {
+            setError(poData.error || "Gagal memuat detail PO");
+            setLoading(false); // Stop loading if PO details fail
+          }
+        } catch (err: any) {
+          console.error("Error fetching PO details:", err);
+          setError("Gagal memuat detail PO");
+          setLoading(false); // Stop loading if PO details fail
+        }
+      } else {
+        setLoading(false); // Stop loading if no poId
+      }
+    };
 
-      setValue("idSupplier", mockPO.idSupplier);
-      setValue("idPembelian", poId);
-      setIsPOBased(true);
-      fetchPOItems(poId);
-    } else {
-      setLoading(false);
-    }
-  }, []);
+    fetchData();
+  }, [poId]); // Depend on poId
 
   // Efek untuk memuat PO ketika supplier berubah
   useEffect(() => {
@@ -286,17 +276,30 @@ export default function NewReceiptPage() {
   const onSubmit = async (data: ReceiptFormData) => {
     setSubmitting(true);
     setError(null);
-
     try {
-      console.log("Form data submitted:", data);
-      // Implementasi server action untuk menyimpan data
-      // await createReceipt(data);
+      const response = await fetch("/api/purchases/receipts/create", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(data),
+      });
 
-      // Redirect ke halaman daftar penerimaan
-      router.push("/purchases/receipts");
+      const result = await response.json();
+
+      if (result.success) {
+        toast.success("Penerimaan barang berhasil dicatat!");
+        reset(); // Reset form after successful submission
+        router.push("/purchases/receipts"); // Redirect to receipts list page
+      } else {
+        setError(result.error || "Gagal mencatat penerimaan barang");
+        toast.error(result.error || "Gagal mencatat penerimaan barang");
+      }
     } catch (err: any) {
       console.error("Error submitting form:", err);
-      setError(err.message || "Gagal menyimpan data penerimaan");
+      setError("Gagal mencatat penerimaan barang");
+      toast.error("Gagal mencatat penerimaan barang");
+    } finally {
       setSubmitting(false);
     }
   };
@@ -320,14 +323,14 @@ export default function NewReceiptPage() {
 
   return (
     <div className="container mx-auto py-6 space-y-6">
-      <div className="flex items-center space-x-2">
+      <div className="flex items-center ml-5 space-x-2">
         <Button variant="outline" size="icon" onClick={goBack}>
           <ChevronLeft className="h-4 w-4" />
         </Button>
         <h1 className="text-3xl font-bold">Catat Penerimaan Barang Baru</h1>
       </div>
 
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-6 mx-5">
         {/* Form Bagian Header Penerimaan */}
         <Card>
           <CardHeader>
@@ -341,22 +344,27 @@ export default function NewReceiptPage() {
               {/* Supplier */}
               <div className="space-y-2">
                 <Label htmlFor="idSupplier">Supplier</Label>
-                <Select
-                  disabled={!!poId}
-                  value={selectedSupplierId}
-                  onValueChange={(value) => setValue("idSupplier", value)}
-                >
-                  <SelectTrigger id="idSupplier">
-                    <SelectValue placeholder="Pilih supplier" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {suppliers.map((supplier) => (
-                      <SelectItem key={supplier.id} value={supplier.id}>
-                        {supplier.nama}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                {/* Conditionally render Select only when suppliers are loaded and selectedSupplierId is set (if poId exists) */}
+                {suppliers.length > 0 && (!poId || selectedSupplierId) ? (
+                  <Select
+                    disabled={!!poId}
+                    value={selectedSupplierId}
+                    onValueChange={(value) => setValue("idSupplier", value)}
+                  >
+                    <SelectTrigger id="idSupplier">
+                      <SelectValue placeholder="Pilih supplier" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {suppliers.map((supplier) => (
+                        <SelectItem key={supplier.id} value={supplier.id}>
+                          {supplier.nama}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <Input placeholder="Memuat supplier..." disabled />
+                )}
                 {errors.idSupplier && (
                   <p className="text-sm text-red-500">Supplier harus dipilih</p>
                 )}
@@ -376,7 +384,7 @@ export default function NewReceiptPage() {
                     <SelectValue placeholder="Pilih nomor PO" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Tanpa PO</SelectItem>
+                    <SelectItem value={null}>Tanpa PO</SelectItem>
                     {purchaseOrders.map((po) => (
                       <SelectItem key={po.id} value={po.id}>
                         {po.nomorPO} (
@@ -450,7 +458,7 @@ export default function NewReceiptPage() {
                 )}
               </div>
 
-              {/* Nama Penerima */}
+              {/* Nama Penerima 
               <div className="space-y-2">
                 <Label>Nama Penerima</Label>
                 <Input value="Admin" disabled />
@@ -458,6 +466,7 @@ export default function NewReceiptPage() {
                   Otomatis diisi dari user yang login
                 </p>
               </div>
+              */}
 
               {/* Catatan Penerimaan */}
               <div className="space-y-2 md:col-span-2">

@@ -250,7 +250,7 @@ export function SupplierFormDialog({
 
             <FormField
               control={form.control}
-              name="catatanTambahan"
+              name="catatan"
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Catatan Tambahan</FormLabel>

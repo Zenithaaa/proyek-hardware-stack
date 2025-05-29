@@ -2,18 +2,41 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 
 // GET semua kategori
-export async function GET() {
+export async function GET(request: Request) {
   try {
+    const { searchParams } = new URL(request.url);
+    const page = parseInt(searchParams.get("page") || "1", 10);
+    const pageSize = parseInt(searchParams.get("pageSize") || "10", 10);
+
+    const skip = (page - 1) * pageSize;
+
     const categories = await prisma.kategori.findMany({
+      skip: skip,
+      take: pageSize,
       include: {
         _count: {
           select: { items: true },
         },
       },
+      orderBy: {
+        // Optional: Add default ordering
+        nama: "asc",
+      },
     });
-    return NextResponse.json(categories, { status: 200 });
+
+    const totalCategories = await prisma.kategori.count();
+
+    return NextResponse.json({ categories, totalCategories }, { status: 200 });
   } catch (error) {
-    return NextResponse.json([], { status: 500 });
+    console.error("Error fetching categories:", error);
+    return NextResponse.json(
+      {
+        categories: [],
+        totalCategories: 0,
+        error: "Failed to fetch categories",
+      },
+      { status: 500 }
+    );
   }
 }
 

@@ -36,51 +36,21 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 
 // Dummy data untuk contoh tampilan
-const dummySuppliers = [
-  { id: 1, nama: "PT Supplier Utama" },
-  { id: 2, nama: "CV Maju Jaya" },
-  { id: 3, nama: "UD Sejahtera" },
-  { id: 4, nama: "PT Barang Lengkap" },
-  { id: 5, nama: "CV Abadi Jaya" },
-];
+// const dummySuppliers = [
+//   { id: 1, nama: "PT Supplier Utama" },
+//   { id: 2, nama: "CV Maju Jaya" },
+//   { id: 3, nama: "UD Sejahtera" },
+//   { id: 4, nama: "PT Barang Lengkap" },
+//   { id: 5, nama: "CV Abadi Jaya" },
+// ];
 
-const dummyItems = [
-  {
-    id: 1,
-    nama: "Paku 2 Inch",
-    kodeBarcode: "BRG001",
-    satuan: "Box",
-    hargaBeli: 25000,
-  },
-  {
-    id: 2,
-    nama: "Cat Tembok 5kg",
-    kodeBarcode: "BRG002",
-    satuan: "Kaleng",
-    hargaBeli: 85000,
-  },
-  {
-    id: 3,
-    nama: "Semen 50kg",
-    kodeBarcode: "BRG003",
-    satuan: "Sak",
-    hargaBeli: 75000,
-  },
-  {
-    id: 4,
-    nama: "Kuas Cat 4 Inch",
-    kodeBarcode: "BRG004",
-    satuan: "Pcs",
-    hargaBeli: 15000,
-  },
-  {
-    id: 5,
-    nama: "Pipa PVC 4m",
-    kodeBarcode: "BRG005",
-    satuan: "Batang",
-    hargaBeli: 45000,
-  },
-];
+// const dummyItems = [
+//   { id: 1, nama: "Paku 2 Inch", kodeBarcode: "BRG001", satuan: "Box", hargaBeli: 25000 },
+//   { id: 2, nama: "Cat Tembok 5kg", kodeBarcode: "BRG002", satuan: "Kaleng", hargaBeli: 85000 },
+//   { id: 3, nama: "Semen 50kg", kodeBarcode: "BRG003", satuan: "Sak", hargaBeli: 75000 },
+//   { id: 4, nama: "Kuas Cat 4 Inch", kodeBarcode: "BRG004", satuan: "Pcs", hargaBeli: 15000 },
+//   { id: 5, nama: "Pipa PVC 4m", kodeBarcode: "BRG005", satuan: "Batang", hargaBeli: 45000 },
+// ];
 
 // Interface untuk item PO
 interface POItem {
@@ -119,23 +89,30 @@ export default function CreatePurchaseOrderPage() {
   // Fetch suppliers data
   const { data: suppliersData } = useQuery({
     queryKey: ["suppliers"],
-    queryFn: () => {
-      // Simulasi API call dengan dummy data
-      return { data: dummySuppliers };
+    queryFn: async () => {
+      const res = await fetch("/api/purchases/orders/data");
+      if (!res.ok) {
+        throw new Error("Failed to fetch suppliers and items");
+      }
+      return res.json();
     },
   });
 
   // Fetch items data
   const { data: itemsData } = useQuery({
     queryKey: ["items"],
-    queryFn: () => {
-      // Simulasi API call dengan dummy data
-      return { data: dummyItems };
+    queryFn: async () => {
+      const res = await fetch("/api/purchases/orders/data");
+      if (!res.ok) {
+        throw new Error("Failed to fetch suppliers and items");
+      }
+      return res.json();
     },
+    select: (data) => data.items, // Select only items from the fetched data
   });
 
-  const suppliers = suppliersData?.data || [];
-  const items = itemsData?.data || [];
+  const suppliers = suppliersData?.suppliers || [];
+  const items = itemsData || [];
 
   // Generate nomor PO otomatis
   const generatePONumber = () => {
@@ -225,17 +202,37 @@ export default function CreatePurchaseOrderPage() {
         alamatPengiriman,
         syaratPembayaran,
         catatan,
-        items: poItems,
+        items: poItems.map((item) => ({
+          itemId: item.itemId,
+          jumlahPesan: item.jumlah,
+          hargaBeli: item.hargaSatuan,
+          subtotal: item.subtotal,
+          // Add other necessary fields for DetailPembelianKeSupplier
+        })),
         subtotal,
         diskon: diskonPO,
         pajak: pajakPO,
-        biayaPengiriman,
+        biayaLain: biayaPengiriman, // Map biayaPengiriman to biayaLain in schema
         total: grandTotal,
         status: "Draft",
+        // Assuming a default user ID for now, replace with actual user ID later
+        userPenerimaId: 1, // Replace with actual user ID
       };
 
       console.log("Saving PO as draft:", poData);
-      // Implementasi API call untuk menyimpan PO akan ditambahkan nanti
+
+      const res = await fetch("/api/purchases/orders", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(poData),
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error || "Failed to save purchase order");
+      }
 
       // Redirect ke halaman daftar PO
       router.push("/purchases/orders");
@@ -261,17 +258,39 @@ export default function CreatePurchaseOrderPage() {
         alamatPengiriman,
         syaratPembayaran,
         catatan,
-        items: poItems,
+        items: poItems.map((item) => ({
+          itemId: item.itemId,
+          jumlahPesan: item.jumlah,
+          hargaBeli: item.hargaSatuan,
+          subtotal: item.subtotal,
+          // Add other necessary fields for DetailPembelianKeSupplier
+        })),
         subtotal,
         diskon: diskonPO,
         pajak: pajakPO,
-        biayaPengiriman,
+        biayaLain: biayaPengiriman, // Map biayaPengiriman to biayaLain in schema
         total: grandTotal,
         status: "Dipesan",
+        // Assuming a default user ID for now, replace with actual user ID later
+        userPenerimaId: 1, // Replace with actual user ID
       };
 
       console.log("Saving and sending PO:", poData);
-      // Implementasi API call untuk menyimpan dan mengirim PO akan ditambahkan nanti
+
+      const res = await fetch("/api/purchases/orders", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(poData),
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(
+          errorData.error || "Failed to save and send purchase order"
+        );
+      }
 
       // Redirect ke halaman daftar PO
       router.push("/purchases/orders");
@@ -283,7 +302,7 @@ export default function CreatePurchaseOrderPage() {
   return (
     <div className="container py-6 space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center ml-5 justify-between">
         <div className="flex items-center space-x-4">
           <Button
             variant="outline"
@@ -297,7 +316,7 @@ export default function CreatePurchaseOrderPage() {
       </div>
 
       {/* Form */}
-      <div className="grid gap-6">
+      <div className="grid gap-6 mx-5">
         {/* Header PO */}
         <Card>
           <CardContent className="pt-6">
@@ -618,11 +637,11 @@ export default function CreatePurchaseOrderPage() {
                   </span>
                 </div>
 
-                <Separator />
+                <Separator className="my-2" />
 
-                <div className="flex justify-between">
-                  <span className="text-lg font-semibold">Grand Total:</span>
-                  <span className="text-lg font-bold">
+                <div className="flex justify-between text-lg font-bold">
+                  <span>Grand Total:</span>
+                  <span>
                     Rp {new Intl.NumberFormat("id-ID").format(grandTotal)}
                   </span>
                 </div>
@@ -631,15 +650,9 @@ export default function CreatePurchaseOrderPage() {
           </CardContent>
         </Card>
 
-        {/* Tombol Aksi */}
-        <div className="flex justify-end space-x-4">
-          <Button
-            variant="outline"
-            onClick={() => router.push("/purchases/orders")}
-          >
-            Batal
-          </Button>
-          <Button variant="secondary" onClick={handleSaveAsDraft}>
+        {/* Action Buttons */}
+        <div className="flex justify-end space-x-4 mx-5">
+          <Button variant="outline" onClick={handleSaveAsDraft}>
             Simpan sebagai Draft
           </Button>
           <Button onClick={handleSaveAndSend}>Simpan dan Kirim PO</Button>

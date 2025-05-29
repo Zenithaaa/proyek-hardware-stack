@@ -44,23 +44,38 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 const formSchema = z.object({
   nama: z.string().min(1, "Nama kategori wajib diisi"),
   description: z.string().optional(),
 });
 
+interface Category {
+  id: string;
+  nama: string;
+  description?: string;
+  _count: { items: number };
+}
+
 export default function CategoryPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false); // Add state for delete loading
-  const [editingCategory, setEditingCategory] = useState<null | {
-    id: string;
-    nama: string;
-    description?: string;
-  }>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [editingCategory, setEditingCategory] = useState<null | Category>(null);
   const queryClient = useQueryClient();
 
-  const form = useForm({
+  // Pagination state
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [totalCategories, setTotalCategories] = useState(0);
+
+  const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       nama: "",
@@ -68,13 +83,19 @@ export default function CategoryPage() {
     },
   });
 
-  const { data: categories, isLoading } = useQuery({
-    queryKey: ["categories"],
+  const { data: categories, isLoading } = useQuery<Category[]>({
+    queryKey: ["categories", page, pageSize], // Include page and pageSize in queryKey
     queryFn: async () => {
-      const response = await fetch("/api/inventory/categories");
-      if (!response.ok) return [];
-      const data = await response.json();
-      return Array.isArray(data) ? data : [];
+      const response = await fetch(
+        `/api/inventory/categories?page=${page}&pageSize=${pageSize}`
+      );
+      if (!response.ok) {
+        setTotalCategories(0);
+        return [];
+      }
+      const result = await response.json();
+      setTotalCategories(result.totalCategories);
+      return Array.isArray(result.categories) ? result.categories : [];
     },
   });
 
@@ -316,6 +337,81 @@ export default function CategoryPage() {
           ))}
         </TableBody>
       </Table>
+
+      {/* Pagination */}
+      <div className="flex items-center justify-between px-2">
+        <div className="flex-1 text-sm text-muted-foreground">
+          {/* You can add selected row info here if needed */}
+        </div>
+        <div className="flex items-center space-x-6 lg:space-x-8">
+          <div className="flex items-center space-x-2">
+            <p className="text-sm font-medium">Rows per page</p>
+            <Select
+              value={pageSize.toString()}
+              onValueChange={(value) => {
+                setPageSize(Number(value));
+                setPage(1); // Reset to first page when page size changes
+              }}
+            >
+              <SelectTrigger className="h-8 w-[70px]">
+                <SelectValue placeholder={pageSize} />
+              </SelectTrigger>
+              <SelectContent side="top">
+                {[10, 20, 30, 40, 50].map((size) => (
+                  <SelectItem key={size} value={size.toString()}>
+                    {size}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex w-[100px] items-center justify-center text-sm font-medium">
+            Page {page} of {Math.ceil(totalCategories / pageSize)}
+          </div>
+          <div className="flex items-center space-x-2">
+            <Button
+              variant="outline"
+              className="hidden h-8 w-8 p-0 lg:flex"
+              onClick={() => setPage(1)}
+              disabled={page <= 1}
+            >
+              <span className="sr-only">Go to first page</span>
+              {/* First page icon */}
+              &laquo;
+            </Button>
+            <Button
+              variant="outline"
+              className="h-8 w-8 p-0"
+              onClick={() => setPage((prev) => Math.max(1, prev - 1))}
+              disabled={page <= 1}
+            >
+              <span className="sr-only">Go to previous page</span>
+              {/* Previous page icon */}
+              &lt;
+            </Button>
+            <Button
+              variant="outline"
+              className="h-8 w-8 p-0"
+              onClick={() => setPage((prev) => prev + 1)}
+              disabled={page * pageSize >= totalCategories}
+            >
+              <span className="sr-only">Go to next page</span>
+              {/* Next page icon */}
+              &gt;
+            </Button>
+            <Button
+              variant="outline"
+              className="hidden h-8 w-8 p-0 lg:flex"
+              onClick={() => setPage(Math.ceil(totalCategories / pageSize))}
+              disabled={page * pageSize >= totalCategories}
+            >
+              <span className="sr-only">Go to last page</span>
+              {/* Last page icon */}
+              &raquo;
+            </Button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

@@ -22,24 +22,79 @@ import {
 } from "@/components/ui/table";
 import { DatePickerWithRange } from "@/components/ui/date-picker-with-range"; // Assuming this component exists
 // import { PageHeader } from '@/components/shared/PageHeader'; // Assuming this component exists or will be created
+import { useQuery } from "@tanstack/react-query";
+import { format } from "date-fns";
 
 // Placeholder for data types - replace with actual types from your schema
-type Customer = { id: string; name: string };
-type Category = { id: string; name: string };
-type Item = { id: string; name: string };
-type Transaction = {
+type Customer = { id: string; nama: string }; // Adjusted to match Pelanggan model
+type Category = { id: string; nama: string }; // Adjusted to match Kategori model
+type Kategori = { id: string; nama: string };
+
+type Item = { id: string; nama: string; kategori: Kategori }; // Adjusted to match Item model
+
+type DetailTransaksiPenjualan = {
   id: string;
-  invoiceNumber: string;
-  dateTime: string;
-  customerName: string;
-  cashierName: string;
-  paymentMethod: string;
+  itemId: number;
+  namaItemSaatTransaksi: string;
+  jumlah: number;
+  hargaJualSaatTransaksi: number;
+  hargaBeliSaatTransaksi?: number;
+  diskonItemPersen?: number;
+  diskonItemNominal?: number;
   subtotal: number;
-  discount: number;
-  tax: number;
-  shippingCost: number;
+  item: Item; // Added relation
+  kategori: Kategori; // Added relation
+};
+
+type PembayaranTransaksi = {
+  id: string;
+  metodePembayaran: string;
+  jumlahDibayar: number;
+  // Add other fields from PembayaranTransaksi if needed
+};
+
+type TransaksiPenjualan = {
+  id: string;
+  nomorStruk: string;
+  pelangganId?: number | null;
+  pelanggan?: Customer | null; // Adjusted relation
+  userId: string; // Kasir - Clerk User ID
+  tanggalWaktuTransaksi: string; // Use string for simplicity, format as needed
+  detailTransaksiPenjualan: DetailTransaksiPenjualan[];
+  subtotalSebelumDiskonPajak: number;
+  totalDiskonTransaksi?: number;
+  totalPajak?: number;
   grandTotal: number;
-  paymentStatus: string;
+  statusPembayaran: string;
+  statusTransaksi: string;
+  paymentGatewayName?: string | null;
+  paymentGatewayOrderId?: string | null;
+  perluDiantar: boolean;
+  alamatPengiriman?: string | null;
+  kotaPengiriman?: string | null;
+  kodePosPengiriman?: string | null;
+  noTelpPenerima?: string | null;
+  catatanPengiriman?: string | null;
+  biayaPengiriman?: number | null;
+  pembayaranTransaksi: PembayaranTransaksi[];
+  sesiKasirId?: string | null;
+  catatanTransaksi?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  // Assuming 'userId' in TransaksiPenjualan relates to a 'User' model
+  // user?: { id: string; name: string }; // Uncomment if you have a User model and relation
+};
+
+type SalesReportResponse = {
+  data: TransaksiPenjualan[];
+  total: number;
+  page: number;
+  limit: number;
+  filters: {
+    customers: Customer[];
+    categories: Category[];
+    items: Item[];
+  };
 };
 
 export default function SalesReportPage() {
@@ -47,41 +102,55 @@ export default function SalesReportPage() {
   const [selectedCustomer, setSelectedCustomer] = useState<string>("all");
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [selectedItem, setSelectedItem] = useState<string>("all");
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(10);
 
-  // Placeholder data - replace with actual data fetching logic
-  const customers: Customer[] = [
-    { id: "1", name: "Pelanggan A" },
-    { id: "2", name: "Pelanggan B" },
-  ];
-  const categories: Category[] = [
-    { id: "1", name: "Kategori X" },
-    { id: "2", name: "Kategori Y" },
-  ];
-  const items: Item[] = [
-    { id: "1", name: "Barang 123" },
-    { id: "2", name: "Barang 456" },
-  ];
-  const transactions: Transaction[] = [
-    {
-      id: "txn1",
-      invoiceNumber: "INV-001",
-      dateTime: "2023-10-26 10:00",
-      customerName: "Pelanggan A",
-      cashierName: "Kasir 1",
-      paymentMethod: "Tunai",
-      subtotal: 100000,
-      discount: 5000,
-      tax: 10000,
-      shippingCost: 0,
-      grandTotal: 105000,
-      paymentStatus: "Lunas",
+  // Fetch sales data using react-query
+  const { data, isLoading, error, refetch } = useQuery<SalesReportResponse>({
+    queryKey: [
+      "salesReport",
+      page,
+      limit,
+      dateRange,
+      selectedCustomer,
+      selectedCategory,
+      selectedItem,
+    ],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      params.append("page", page.toString());
+      params.append("limit", limit.toString());
+      if (dateRange?.from)
+        params.append("fromDate", format(dateRange.from, "yyyy-MM-dd"));
+      if (dateRange?.to)
+        params.append("toDate", format(dateRange.to, "yyyy-MM-dd"));
+      if (selectedCustomer !== "all")
+        params.append("customerId", selectedCustomer);
+      if (selectedCategory !== "all")
+        params.append("categoryId", selectedCategory);
+      if (selectedItem !== "all") params.append("itemId", selectedItem);
+
+      const response = await fetch(
+        `/api/reports/sales-summary?${params.toString()}`
+      );
+      if (!response.ok) {
+        throw new Error("Failed to fetch sales report");
+      }
+      return response.json();
     },
-    // ... more transactions
-  ];
+  });
+
+  // TODO: Fetch actual customers, categories, and items for filter dropdowns
+  const customers = data?.filters.customers || [];
+  const categories = data?.filters.categories || [];
+  const items = data?.filters.items || [];
+
+  const transactions = data?.data || [];
+  const totalTransactions = data?.total || 0;
 
   const handleExport = () => {
     console.log("Exporting report...");
-    // Implement CSV/Excel export logic here
+    // Implement CSV/Excel export logic here, potentially calling a new API endpoint
   };
 
   const handlePrint = () => {
@@ -90,13 +159,8 @@ export default function SalesReportPage() {
   };
 
   const handleApplyFilters = () => {
-    console.log("Applying filters:", {
-      dateRange,
-      selectedCustomer,
-      selectedCategory,
-      selectedItem,
-    });
-    // Implement filter logic and refetch data here
+    setPage(1); // Reset to first page on applying filters
+    refetch();
   };
 
   const handleResetFilters = () => {
@@ -104,19 +168,36 @@ export default function SalesReportPage() {
     setSelectedCustomer("all");
     setSelectedCategory("all");
     setSelectedItem("all");
+    setPage(1);
     console.log("Filters reset");
-    // Refetch data with default/no filters
+    refetch(); // Refetch data with default/no filters
   };
 
   // Placeholder KPI values - calculate based on filtered transactions
-  const totalSales = transactions.reduce((sum, t) => sum + t.grandTotal, 0);
-  const successfulTransactions = transactions.length;
+  const totalSales = transactions.reduce(
+    (sum, t) => sum + parseFloat((t.grandTotal as any) || "0"),
+    0
+  );
+  const successfulTransactions = totalTransactions; // Use total count from API
   const averageTransactionValue =
     successfulTransactions > 0 ? totalSales / successfulTransactions : 0;
-  const totalDiscount = transactions.reduce((sum, t) => sum + t.discount, 0);
-  const totalTax = transactions.reduce((sum, t) => sum + t.tax, 0);
+  const totalDiscount = transactions.reduce(
+    (sum, t) =>
+      sum +
+      parseFloat((t.totalDiskonTransaksi as any) || "0") +
+      t.detailTransaksiPenjualan.reduce(
+        (itemSum, detail) =>
+          itemSum + parseFloat((detail.diskonItemNominal as any) || "0"),
+        0
+      ),
+    0
+  );
+  const totalTax = transactions.reduce(
+    (sum, t) => sum + parseFloat((t.totalPajak as any) || "0"),
+    0
+  );
   const totalShipping = transactions.reduce(
-    (sum, t) => sum + t.shippingCost,
+    (sum, t) => sum + parseFloat((t.biayaPengiriman as any) || "0"),
     0
   );
 
@@ -127,10 +208,12 @@ export default function SalesReportPage() {
         {/* <PageHeader title="Laporan Penjualan" /> */}
         <h1 className="text-2xl font-bold">Laporan Penjualan</h1>
         <div className="flex space-x-2">
-          <Button onClick={handleExport} variant="outline">
-            <Download className="mr-2 h-4 w-4" />
-            Export Laporan (CSV)
-          </Button>
+          {/*
+            <Button onClick={handleExport} variant="outline">
+              <Download className="mr-2 h-4 w-4" />
+              Export Laporan (CSV)
+            </Button>
+          */}
           <Button onClick={handlePrint} variant="outline">
             <Printer className="mr-2 h-4 w-4" />
             Cetak Laporan
@@ -164,9 +247,13 @@ export default function SalesReportPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Semua Pelanggan</SelectItem>
+                  {/* Render fetched customers here */}
                   {customers.map((customer) => (
-                    <SelectItem key={customer.id} value={customer.id}>
-                      {customer.name}
+                    <SelectItem
+                      key={customer.id}
+                      value={customer.id.toString()}
+                    >
+                      {customer.nama}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -185,9 +272,13 @@ export default function SalesReportPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Semua Kategori</SelectItem>
+                  {/* Render fetched categories here */}
                   {categories.map((category) => (
-                    <SelectItem key={category.id} value={category.id}>
-                      {category.name}
+                    <SelectItem
+                      key={category.id}
+                      value={category.id.toString()}
+                    >
+                      {category.nama}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -203,9 +294,10 @@ export default function SalesReportPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Semua Barang</SelectItem>
+                  {/* Render fetched items here */}
                   {items.map((item) => (
-                    <SelectItem key={item.id} value={item.id}>
-                      {item.name}
+                    <SelectItem key={item.id} value={item.id.toString()}>
+                      {item.nama}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -213,11 +305,15 @@ export default function SalesReportPage() {
             </div>
           </div>
           <div className="flex justify-end space-x-2 pt-4">
-            <Button onClick={handleApplyFilters}>
+            <Button onClick={handleApplyFilters} disabled={isLoading}>
               <Search className="mr-2 h-4 w-4" />
-              Tampilkan Laporan
+              {isLoading ? "Memuat..." : "Tampilkan Laporan"}
             </Button>
-            <Button onClick={handleResetFilters} variant="outline">
+            <Button
+              onClick={handleResetFilters}
+              variant="outline"
+              disabled={isLoading}
+            >
               <RotateCcw className="mr-2 h-4 w-4" />
               Reset Filter
             </Button>
@@ -242,7 +338,7 @@ export default function SalesReportPage() {
             <CardTitle>Jumlah Transaksi Sukses</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-2xl font-bold">{successfulTransactions}</p>
+            <p className="text-2xl font-bold">{totalTransactions}</p>
           </CardContent>
         </Card>
         <Card>
@@ -291,43 +387,68 @@ export default function SalesReportPage() {
           <CardTitle>Detail Transaksi Penjualan</CardTitle>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>No. Struk</TableHead>
-                <TableHead>Tanggal & Waktu</TableHead>
-                <TableHead>Pelanggan</TableHead>
-                <TableHead>Kasir</TableHead>
-                <TableHead>Metode Pembayaran</TableHead>
-                <TableHead className="text-right">Subtotal</TableHead>
-                <TableHead className="text-right">Diskon</TableHead>
-                <TableHead className="text-right">Pajak</TableHead>
-                <TableHead className="text-right">Biaya Kirim</TableHead>
-                <TableHead className="text-right">Grand Total</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Aksi</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {transactions.length > 0 ? (
-                transactions.map((tx) => (
+          {isLoading ? (
+            <div>Memuat laporan...</div>
+          ) : error ? (
+            <div>Error: {error.message}</div>
+          ) : transactions.length > 0 ? (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>No. Struk</TableHead>
+                  <TableHead>Tanggal & Waktu</TableHead>
+                  <TableHead>Nama Barang</TableHead>
+                  <TableHead>Kategori Barang</TableHead>
+                  <TableHead>Pelanggan</TableHead>
+                  <TableHead>Kasir</TableHead>
+                  <TableHead>Metode Pembayaran</TableHead>
+                  <TableHead className="text-right">Subtotal</TableHead>
+                  <TableHead className="text-right">Diskon</TableHead>
+                  <TableHead className="text-right">Pajak</TableHead>
+                  <TableHead className="text-right">Biaya Kirim</TableHead>
+                  <TableHead className="text-right">Grand Total</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Aksi</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {transactions.map((tx) => (
                   <TableRow key={tx.id}>
-                    <TableCell>{tx.invoiceNumber}</TableCell>
-                    <TableCell>{tx.dateTime}</TableCell>
-                    <TableCell>{tx.customerName}</TableCell>
-                    <TableCell>{tx.cashierName}</TableCell>
-                    <TableCell>{tx.paymentMethod}</TableCell>
+                    <TableCell>{tx.nomorStruk}</TableCell>
+                    <TableCell>
+                      {format(
+                        new Date(tx.tanggalWaktuTransaksi),
+                        "yyyy-MM-dd HH:mm"
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {tx.detailTransaksiPenjualan
+                        .map((detail) => detail.item.nama)
+                        .join(", ")}
+                    </TableCell>
+                    <TableCell>
+                      {tx.detailTransaksiPenjualan
+                        .map((detail) => detail.item.kategori.nama)
+                        .join(", ")}
+                    </TableCell>
+                    <TableCell>{tx.pelanggan?.nama || "Umum"}</TableCell>
+                    <TableCell>{tx.userId}</TableCell>
+                    {/* TODO: Fetch Kasir name */}
+                    <TableCell>
+                      {tx.pembayaranTransaksi[0]?.metodePembayaran || "-"}
+                    </TableCell>
+                    {/* Assuming one payment for simplicity */}
                     <TableCell className="text-right">
-                      {tx.subtotal.toLocaleString()}
+                      {tx.subtotalSebelumDiskonPajak.toLocaleString()}
                     </TableCell>
                     <TableCell className="text-right">
-                      {tx.discount.toLocaleString()}
+                      {(tx.totalDiskonTransaksi || 0).toLocaleString()}
                     </TableCell>
                     <TableCell className="text-right">
-                      {tx.tax.toLocaleString()}
+                      {(tx.totalPajak || 0).toLocaleString()}
                     </TableCell>
                     <TableCell className="text-right">
-                      {tx.shippingCost.toLocaleString()}
+                      {(tx.biayaPengiriman || 0).toLocaleString()}
                     </TableCell>
                     <TableCell className="text-right font-semibold">
                       {tx.grandTotal.toLocaleString()}
@@ -336,12 +457,13 @@ export default function SalesReportPage() {
                       {/* Replace with Badge component */}
                       <span
                         className={`px-2 py-1 text-xs font-semibold rounded-full ${
-                          tx.paymentStatus === "Lunas"
+                          tx.statusPembayaran === "PAID_VIA_MIDTRANS" ||
+                          tx.statusTransaksi === "SELESAI"
                             ? "bg-green-100 text-green-800"
                             : "bg-yellow-100 text-yellow-800"
                         }`}
                       >
-                        {tx.paymentStatus}
+                        {tx.statusTransaksi}
                       </span>
                     </TableCell>
                     <TableCell>
@@ -350,17 +472,38 @@ export default function SalesReportPage() {
                       </Button>
                     </TableCell>
                   </TableRow>
-                ))
-              ) : (
-                <TableRow>
-                  <TableCell colSpan={12} className="text-center">
-                    Tidak ada data transaksi.
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-          {/* Add pagination controls here if using @tanstack/react-table */}
+                ))}
+              </TableBody>
+            </Table>
+          ) : (
+            <div className="text-center">Tidak ada data transaksi.</div>
+          )}
+
+          {/* Add pagination controls here */}
+          {totalTransactions > 0 && (
+            <div className="flex justify-center mt-4">
+              {/* Basic Pagination Controls - Replace with a proper component */}
+              <Button
+                variant="outline"
+                onClick={() => setPage((prev) => Math.max(prev - 1, 1))}
+                disabled={page === 1 || isLoading}
+                className="mr-2"
+              >
+                Sebelumnya
+              </Button>
+              <span className="self-center">
+                Halaman {page} dari {Math.ceil(totalTransactions / limit)}
+              </span>
+              <Button
+                variant="outline"
+                onClick={() => setPage((prev) => prev + 1)}
+                disabled={page * limit >= totalTransactions || isLoading}
+                className="ml-2"
+              >
+                Berikutnya
+              </Button>
+            </div>
+          )}
         </CardContent>
       </Card>
 

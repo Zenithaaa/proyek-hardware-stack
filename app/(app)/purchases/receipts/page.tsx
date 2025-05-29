@@ -59,7 +59,7 @@ type Receipt = {
   nomorSuratJalanSupplier: string;
   nomorPO: string | null;
   namaSupplier: string;
-  status: "Lengkap Sesuai PO" | "Sebagian Diterima" | "Tanpa PO";
+  status: string; // Mengubah tipe data status menjadi string
 };
 
 type ReceiptResponse = {
@@ -115,52 +115,15 @@ export default function ReceiptsPage() {
         url += `&searchQuery=${encodeURIComponent(searchQuery)}`;
       }
 
-      // Simulasi data untuk demo (ganti dengan fetch API sebenarnya)
-      // const response = await fetch(url);
-      // const data: ReceiptResponse = await response.json();
+      const response = await fetch(url);
+      const data: ReceiptResponse = await response.json();
 
-      // Simulasi data untuk demo
-      const mockData: ReceiptResponse = {
-        success: true,
-        data: [
-          {
-            id: "1",
-            nomorDokumenPenerimaan: "RCV-2023-001",
-            tanggalPenerimaan: "2023-06-15T10:30:00Z",
-            nomorSuratJalanSupplier: "SJ-ABC-123",
-            nomorPO: "PO-2023-001",
-            namaSupplier: "PT Supplier Utama",
-            status: "Lengkap Sesuai PO",
-          },
-          {
-            id: "2",
-            nomorDokumenPenerimaan: "RCV-2023-002",
-            tanggalPenerimaan: "2023-06-16T14:45:00Z",
-            nomorSuratJalanSupplier: "SJ-DEF-456",
-            nomorPO: "PO-2023-002",
-            namaSupplier: "CV Maju Jaya",
-            status: "Sebagian Diterima",
-          },
-          {
-            id: "3",
-            nomorDokumenPenerimaan: "RCV-2023-003",
-            tanggalPenerimaan: "2023-06-17T09:15:00Z",
-            nomorSuratJalanSupplier: "SJ-GHI-789",
-            nomorPO: null,
-            namaSupplier: "UD Berkah Abadi",
-            status: "Tanpa PO",
-          },
-        ],
-        meta: {
-          totalCount: 3,
-          page: 1,
-          pageSize: 10,
-          totalPages: 1,
-        },
-      };
-
-      setReceipts(mockData.data);
-      setMeta(mockData.meta);
+      if (data.success) {
+        setReceipts(data.data);
+        setMeta(data.meta);
+      } else {
+        setError(data.error || "Failed to fetch receipts");
+      }
     } catch (err: any) {
       setError(err.message || "Terjadi kesalahan saat memuat data");
       console.error("Error fetching receipts:", err);
@@ -189,7 +152,7 @@ export default function ReceiptsPage() {
 
   // Fungsi untuk mengarahkan ke halaman detail penerimaan
   const viewReceiptDetail = (receiptId: string) => {
-    router.push(`/purchases/receipts/${receiptId}`);
+    router.push(`/purchases/receipts/new?receiptId=${receiptId}`);
   };
 
   // Fungsi untuk mengarahkan ke halaman form penerimaan baru
@@ -212,40 +175,59 @@ export default function ReceiptsPage() {
   }, [searchQuery]);
 
   // Render status badge dengan warna yang sesuai
-  const renderStatusBadge = (status: Receipt["status"]) => {
-    let variant: "default" | "secondary" | "destructive" | "outline" =
-      "default";
+  const renderStatusBadge = (status: string) => {
+    // Mengubah tipe parameter menjadi string
+    let variant:
+      | "default"
+      | "secondary"
+      | "destructive"
+      | "outline"
+      | "success" = "outline"; // Menambahkan 'success' // Mengubah default menjadi outline
+
+    let displayText = status; // Default display text is the status itself
 
     switch (status) {
-      case "Lengkap Sesuai PO":
-        variant = "default";
+      case "LENGKAP_SESUAI_PO": // From StatusPenerimaan enum
+      case "Diterima Lengkap": // From PO status
+        displayText = "Lengkap Sesuai PO";
+        variant = "success"; // Menggunakan success untuk status lengkap
         break;
-      case "Sebagian Diterima":
-        variant = "secondary";
+      case "SEBAGIAN_DITERIMA": // From StatusPenerimaan enum
+      case "Diterima Sebagian": // From PO status
+        displayText = "Sebagian Diterima";
+        variant = "default"; // Menggunakan default untuk status sebagian atau dipesan
         break;
-      case "Tanpa PO":
+      case "TANPA_PO": // From StatusPenerimaan enum
+        displayText = "Tanpa PO";
+        variant = "outline";
+        break;
+      // Handle other PO statuses if they appear, map them to 'Tanpa PO' in receipt context
+      case "Draft":
+      case "Dipesan":
+      case "Dibatalkan":
+        displayText = "Tanpa PO";
         variant = "outline";
         break;
       default:
-        variant = "default";
+        variant = "outline"; // Fallback for any unexpected status
     }
 
-    return <Badge variant={variant}>{status}</Badge>;
+    return <Badge variant={variant}>{displayText}</Badge>;
   };
 
   return (
     <div className="container mx-auto py-6 space-y-6">
       {/* Header & Aksi Utama */}
-      <div className="flex justify-between items-center">
+      <div className="flex justify-between mx-5 items-center">
         <h1 className="text-3xl font-bold">Daftar Penerimaan Barang</h1>
-        <Button onClick={createNewReceipt}>
+        <Button className="cursor-pointer" onClick={createNewReceipt}>
           <PackageCheck className="mr-2 h-4 w-4" />
           Catat Penerimaan Baru
         </Button>
       </div>
 
       {/* Area Filter & Pencarian */}
-      <Card>
+      <Card className="mx-5">
         <CardContent className="p-6 space-y-4">
           <h2 className="text-lg font-semibold">Filter Penerimaan Barang</h2>
 
@@ -297,7 +279,7 @@ export default function ReceiptsPage() {
       </Card>
 
       {/* Tabel Data Penerimaan Barang */}
-      <Card>
+      <Card className="mx-5">
         <CardContent className="p-0">
           <div className="overflow-x-auto">
             <Table>

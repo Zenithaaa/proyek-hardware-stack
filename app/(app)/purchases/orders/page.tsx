@@ -37,55 +37,32 @@ import {
 import { format } from "date-fns";
 import { id } from "date-fns/locale";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 
 // Dummy data untuk contoh tampilan
-const dummyPurchaseOrders = [
-  {
-    id: 1,
-    nomorPO: "PO-2023-001",
-    tanggalPesan: new Date("2023-06-01"),
-    namaSupplier: "PT Supplier Utama",
-    total: 5000000,
-    status: "Draft",
-    tanggalJatuhTempo: new Date("2023-06-15"),
-  },
-  {
-    id: 2,
-    nomorPO: "PO-2023-002",
-    tanggalPesan: new Date("2023-06-05"),
-    namaSupplier: "CV Maju Jaya",
-    total: 3500000,
-    status: "Dipesan",
-    tanggalJatuhTempo: new Date("2023-06-20"),
-  },
-  {
-    id: 3,
-    nomorPO: "PO-2023-003",
-    tanggalPesan: new Date("2023-06-10"),
-    namaSupplier: "UD Sejahtera",
-    total: 2800000,
-    status: "Sebagian Diterima",
-    tanggalJatuhTempo: new Date("2023-06-25"),
-  },
-  {
-    id: 4,
-    nomorPO: "PO-2023-004",
-    tanggalPesan: new Date("2023-06-15"),
-    namaSupplier: "PT Barang Lengkap",
-    total: 4200000,
-    status: "Selesai Diterima",
-    tanggalJatuhTempo: new Date("2023-06-30"),
-  },
-  {
-    id: 5,
-    nomorPO: "PO-2023-005",
-    tanggalPesan: new Date("2023-06-20"),
-    namaSupplier: "CV Abadi Jaya",
-    total: 1800000,
-    status: "Dibatalkan",
-    tanggalJatuhTempo: new Date("2023-07-05"),
-  },
-];
+// const dummyPurchaseOrders = [
+//   {
+//     id: 1,
+//     nomorPO: "PO-2023-001",
+//     tanggalPesan: new Date("2023-06-01"),
+//     namaSupplier: "PT Supplier Utama",
+//     total: 5000000,
+//     status: "Draft",
+//     tanggalJatuhTempo: new Date("2023-06-15"),
+//   },
+//   {
+//     id: 2,
+//     nomorPO: "PO-2023-002",
+//     tanggalPesan: new Date("2023-06-05"),
+//     namaSupplier: "CV Maju Jaya",
+//     total: 3500000,
+//     status: "Dipesan",
+//     tanggalJatuhTempo: new Date("2023-06-20"),
+//   },
+//   { id: 3, nomorPO: "PO-2023-003", tanggalPesan: new Date("2023-06-10"), namaSupplier: "UD Sejahtera", total: 2800000, status: "Sebagian Diterima", tanggalJatuhTempo: new Date("2023-06-25") },
+//   { id: 4, nomorPO: "PO-2023-004", tanggalPesan: new Date("2023-06-15"), namaSupplier: "PT Barang Lengkap", total: 4200000, status: "Selesai Diterima", tanggalJatuhTempo: new Date("2023-06-30") },
+//   { id: 5, nomorPO: "PO-2023-005", tanggalPesan: new Date("2023-06-20"), namaSupplier: "CV Abadi Jaya", total: 1800000, status: "Dibatalkan", tanggalJatuhTempo: new Date("2023-07-05") },
+// ];
 
 // Helper function untuk mendapatkan warna badge berdasarkan status
 const getStatusBadgeVariant = (status: string) => {
@@ -114,6 +91,9 @@ export default function PurchaseOrdersPage() {
     id: number;
     nomorPO: string;
   } | null>(null);
+  const [dateRange, setDateRange] = useState<
+    { from?: Date; to?: Date } | undefined
+  >(undefined);
 
   // Fetch purchase orders data with pagination and search
   // Untuk saat ini menggunakan dummy data
@@ -122,32 +102,37 @@ export default function PurchaseOrdersPage() {
     isLoading,
     refetch,
   } = useQuery({
-    queryKey: ["purchaseOrders", currentPage, searchQuery, statusFilter],
-    queryFn: () => {
-      // Simulasi filter dan pencarian dengan dummy data
-      let filteredData = [...dummyPurchaseOrders];
-
-      // Filter berdasarkan pencarian
+    queryKey: [
+      "purchaseOrders",
+      currentPage,
+      searchQuery,
+      statusFilter,
+      dateRange,
+    ],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      params.append("page", currentPage.toString());
+      params.append("limit", "10"); // Assuming 10 items per page
       if (searchQuery) {
-        filteredData = filteredData.filter(
-          (po) =>
-            po.nomorPO.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            po.namaSupplier.toLowerCase().includes(searchQuery.toLowerCase())
-        );
+        params.append("search", searchQuery);
       }
-
-      // Filter berdasarkan status
       if (statusFilter !== "Semua") {
-        filteredData = filteredData.filter((po) => po.status === statusFilter);
+        params.append("status", statusFilter);
+      }
+      if (dateRange?.from) {
+        params.append("startDate", format(dateRange.from, "yyyy-MM-dd"));
+      }
+      if (dateRange?.to) {
+        params.append("endDate", format(dateRange.to, "yyyy-MM-dd"));
       }
 
-      return {
-        data: filteredData,
-        meta: {
-          totalPages: 1,
-          totalCount: filteredData.length,
-        },
-      };
+      const res = await fetch(
+        `/api/purchases/orders/list?${params.toString()}`
+      );
+      if (!res.ok) {
+        throw new Error("Failed to fetch purchase orders");
+      }
+      return res.json();
     },
   });
 
@@ -184,6 +169,15 @@ export default function PurchaseOrdersPage() {
       // Implementasi API call untuk menghapus PO akan ditambahkan nanti
       console.log(`Deleting PO: ${poToDelete.nomorPO}`);
 
+      const res = await fetch(`/api/purchases/orders/${poToDelete.id}`, {
+        method: "DELETE",
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error || "Failed to delete purchase order");
+      }
+
       // Refresh data setelah menghapus
       refetch();
     } catch (error) {
@@ -198,13 +192,14 @@ export default function PurchaseOrdersPage() {
   const handleResetFilter = () => {
     setSearchQuery("");
     setStatusFilter("Semua");
+    setDateRange(undefined);
     setCurrentPage(1);
   };
 
   // Render loading skeleton
   if (isLoading) {
     return (
-      <div className="container py-6 space-y-6">
+      <div className="container mx-5 py-6 space-y-6">
         <div className="flex justify-between items-center">
           <h1 className="text-2xl font-bold">Daftar Pesanan Pembelian (PO)</h1>
           <Skeleton className="h-10 w-40" />
@@ -238,7 +233,7 @@ export default function PurchaseOrdersPage() {
   return (
     <div className="container py-6 space-y-6">
       {/* Header & Main Actions */}
-      <div className="flex justify-between items-center">
+      <div className="flex mx-5 justify-between items-center">
         <h1 className="text-2xl font-bold">Daftar Pesanan Pembelian (PO)</h1>
         <Button asChild>
           <Link href="/purchases/orders/new">
@@ -249,10 +244,14 @@ export default function PurchaseOrdersPage() {
       </div>
 
       {/* Filter & Search Area */}
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid gap-4 mx-5 md:grid-cols-4">
         <div className="space-y-2">
           <label className="text-sm font-medium">Rentang Tanggal PO</label>
-          <DatePickerWithRange className="w-full" />
+          <DatePickerWithRange
+            className="w-full"
+            value={dateRange}
+            onChange={setDateRange}
+          />
         </div>
 
         <div className="space-y-2">
@@ -297,7 +296,7 @@ export default function PurchaseOrdersPage() {
       </div>
 
       {/* Purchase Orders Table */}
-      <div className="border rounded-md">
+      <div className="border rounded-md mx-5">
         <Table>
           <TableHeader>
             <TableRow>

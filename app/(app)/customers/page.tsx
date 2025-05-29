@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
 import {
   PlusCircle,
   Edit,
@@ -10,13 +11,17 @@ import {
   History,
   Search,
   UserPlus,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
 } from "lucide-react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { id } from "date-fns/locale";
 
 import { Button } from "@/components/ui/button";
-import { PageHeader } from "@/components/page-header";
+import { PageHeader } from "@/components/shared/PageHeader";
 import {
   Dialog,
   DialogContent,
@@ -43,13 +48,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Calendar } from "@/components/ui/calendar";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { Textarea } from "@/components/ui/textarea";
+import { Calendar } from "@/components/ui/calendar";
 import {
   Table,
   TableBody,
@@ -69,116 +73,228 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-// import { DataTable } from "@/components/shared/DataTable"; // Placeholder for potential DataTable component
-
 import { toast } from "sonner";
+import { Textarea } from "@/components/ui/textarea";
 
-// TODO: Define Zod schema for customer form validation
-// const customerFormSchema = z.object({...});
+// Define Zod schema for customer form validation
+const customerFormSchema = z.object({
+  nama: z.string().min(1, { message: "Nama pelanggan wajib diisi." }),
+  noTelp: z.string().optional(),
+  email: z
+    .string()
+    .email({ message: "Format email tidak valid." })
+    .optional()
+    .or(z.literal("")), // Allow empty string
+  alamat: z.string().optional(),
+  kota: z.string().optional(),
+  kodePos: z.string().optional(),
+  jenisKelamin: z.string().optional(),
+  tanggalRegistrasi: z.date().optional(),
+  // loyaltyPoints: z.number().optional(), // Should be read-only or handled server-side
+  catatan: z.string().optional(),
+});
 
-// TODO: Define type for Customer data
-// type Customer = {...};
+// Define type for Customer data based on Prisma schema
+interface Customer {
+  id: number;
+  nama: string;
+  jenisKelamin: string | null;
+  noTelp: string | null;
+  alamat: string | null;
+  email: string | null;
+  poinLoyalitas: number | null;
+  tanggalRegistrasi: Date | null;
+  // Add other fields from your schema if needed
+}
+
+interface CustomerResponse {
+  success: boolean;
+  data: Customer[];
+  meta: {
+    totalCount: number;
+    page: number;
+    pageSize: number;
+    totalPages: number;
+  };
+}
 
 export default function CustomersPage() {
+  const queryClient = useQueryClient();
   const [isAddEditDialogOpen, setIsAddEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-  const [selectedCustomer, setSelectedCustomer] = useState<any | null>(null); // Replace 'any' with Customer type
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(
+    null
+  );
   const [searchQuery, setSearchQuery] = useState("");
-  const [filterGroup, setFilterGroup] = useState("all");
   const [filterCity, setFilterCity] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
-  // TODO: Replace with actual form schema
-  const form = useForm({
-    // resolver: zodResolver(customerFormSchema),
+  const form = useForm<z.infer<typeof customerFormSchema>>({
+    resolver: zodResolver(customerFormSchema),
     defaultValues: {
-      name: "",
-      phone: "",
+      nama: "",
+      noTelp: "",
       email: "",
-      fullAddress: "",
-      city: "",
-      postalCode: "",
-      gender: "",
-      dateOfBirth: undefined,
-      customerGroup: "",
-      loyaltyPoints: 0, // Should be read-only or handled server-side
-      notes: "",
+      alamat: "",
+      kota: "",
+      kodePos: "",
+      jenisKelamin: "",
+      tanggalRegistrasi: undefined,
+      catatan: "",
     },
   });
 
-  // TODO: Implement react-query for fetching customers
-  // const { data: customers, isLoading, error } = useQuery(...);
-  const customers: any[] = []; // Placeholder
-  const isLoading = false; // Placeholder
-  const error = null; // Placeholder
+  // Fetch customers using react-query
+  const { data, isLoading, error } = useQuery<CustomerResponse>({
+    queryKey: ["customers", currentPage, pageSize, searchQuery, filterCity],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      params.append("page", currentPage.toString());
+      params.append("pageSize", pageSize.toString());
+      if (searchQuery) params.append("searchQuery", searchQuery);
+      if (filterCity) params.append("filterCity", filterCity);
+
+      const response = await fetch(`/api/customers?${params.toString()}`);
+      if (!response.ok) {
+        throw new Error("Failed to fetch customers");
+      }
+      return response.json();
+    },
+    placeholderData: (previousData) => previousData, // Keep previous data while fetching new
+  });
+
+  const customers = data?.data || [];
+  const totalCount = data?.meta.totalCount || 0;
+  const totalPages = data?.meta.totalPages || 1;
+
+  // Mutation for adding/editing customer
+  const saveCustomerMutation = useMutation({
+    mutationFn: async (
+      customerData: z.infer<typeof customerFormSchema> & { id?: number }
+    ) => {
+      const url = customerData.id
+        ? `/api/customers/${customerData.id}`
+        : "/api/customers";
+      const method = customerData.id ? "PUT" : "POST";
+
+      const response = await fetch(url, {
+        method,
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(customerData),
+      });
+
+      if (!response.ok) {
+        let errorData;
+        try {
+          errorData = await response.json();
+        } catch (jsonError) {
+          // If response is not JSON, throw a generic error with status
+          throw new Error(
+            `Server returned status ${response.status}: ${response.statusText}`
+          );
+        }
+        throw new Error(errorData.error || "Failed to save customer");
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["customers"] }); // Refetch customers after save
+      toast.success(
+        selectedCustomer
+          ? "Data pelanggan berhasil diperbarui."
+          : "Pelanggan baru berhasil ditambahkan."
+      );
+      setIsAddEditDialogOpen(false);
+      form.reset();
+    },
+    onError: (error: any) => {
+      toast.error(error.message || "Gagal menyimpan data pelanggan.");
+    },
+  });
+
+  // Mutation for deleting customer
+  const deleteCustomerMutation = useMutation({
+    mutationFn: async (customerId: number) => {
+      const response = await fetch(`/api/customers/${customerId}`, {
+        method: "DELETE",
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to delete customer");
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["customers"] }); // Refetch customers after delete
+      toast.success("Pelanggan berhasil dihapus.");
+      setIsDeleteDialogOpen(false);
+    },
+    onError: (error: any) => {
+      toast.error(error.message || "Gagal menghapus pelanggan.");
+    },
+  });
 
   const handleAddNewCustomer = () => {
     setSelectedCustomer(null);
-    form.reset(); // Reset form for new customer
+    form.reset({
+      nama: "",
+      noTelp: "",
+      email: "",
+      alamat: "",
+      kota: "",
+      kodePos: "",
+      jenisKelamin: "",
+      tanggalRegistrasi: undefined,
+      catatan: "",
+    }); // Reset form for new customer
     setIsAddEditDialogOpen(true);
   };
 
-  const handleEditCustomer = (customer: any) => {
+  const handleEditCustomer = (customer: Customer) => {
     setSelectedCustomer(customer);
-    form.reset(customer); // Populate form with customer data
+    form.reset({
+      ...customer,
+      tanggalRegistrasi: customer.tanggalRegistrasi
+        ? new Date(customer.tanggalRegistrasi)
+        : undefined,
+    }); // Populate form with customer data
     setIsAddEditDialogOpen(true);
   };
 
-  const handleDeleteCustomer = (customer: any) => {
+  const handleDeleteCustomer = (customer: Customer) => {
     setSelectedCustomer(customer);
     setIsDeleteDialogOpen(true);
   };
 
   const confirmDelete = async () => {
     if (!selectedCustomer) return;
-    // TODO: Implement delete action using Server Action
-    // try {
-    //   await deleteCustomerAction(selectedCustomer.id);
-    //   toast.success(`Pelanggan "${selectedCustomer.name}" berhasil dihapus.`);
-    //   setIsDeleteDialogOpen(false);
-    //   // TODO: Refetch customer list
-    // } catch (err) {
-    //   toast.error("Gagal menghapus pelanggan.");
-    // }
-    console.log("Deleting customer:", selectedCustomer.name);
-    toast.success(
-      `Pelanggan "${selectedCustomer.name}" berhasil dihapus (simulasi).`
-    );
-    setIsDeleteDialogOpen(false);
+    deleteCustomerMutation.mutate(selectedCustomer.id);
   };
 
-  const onSubmit = async (values: any) => {
-    // TODO: Implement create/update action using Server Action
-    if (selectedCustomer) {
-      // Update existing customer
-      // await updateCustomerAction({ ...selectedCustomer, ...values });
-      toast.success(
-        `Data pelanggan "${values.name}" berhasil diperbarui (simulasi).`
-      );
-    } else {
-      // Create new customer
-      // await createCustomerAction(values);
-      toast.success(
-        `Pelanggan "${values.name}" berhasil ditambahkan (simulasi).`
-      );
-    }
-    setIsAddEditDialogOpen(false);
-    form.reset();
-    // TODO: Refetch customer list
+  const onSubmit = async (values: z.infer<typeof customerFormSchema>) => {
+    saveCustomerMutation.mutate({ ...values, id: selectedCustomer?.id });
   };
 
-  // Placeholder for filtered customers
-  const filteredCustomers = customers.filter((customer) => {
-    const searchTerm = searchQuery.toLowerCase();
-    const nameMatch = customer.name?.toLowerCase().includes(searchTerm);
-    const phoneMatch = customer.phone?.toLowerCase().includes(searchTerm);
-    const emailMatch = customer.email?.toLowerCase().includes(searchTerm);
-    const groupMatch =
-      filterGroup === "all" || customer.customerGroup === filterGroup;
-    const cityMatch =
-      filterCity === "" ||
-      customer.city?.toLowerCase().includes(filterCity.toLowerCase());
-    return (nameMatch || phoneMatch || emailMatch) && groupMatch && cityMatch;
-  });
+  // Handle pagination
+  const handlePreviousPage = () => {
+    setCurrentPage((prev) => Math.max(prev - 1, 1));
+  };
+
+  const handleNextPage = () => {
+    setCurrentPage((prev) => Math.min(prev + 1, totalPages));
+  };
+
+  const handleFirstPage = () => {
+    setCurrentPage(1);
+  };
+
+  const handleLastPage = () => {
+    setCurrentPage(totalPages);
+  };
 
   return (
     <div className="space-y-6 p-6">
@@ -225,8 +341,8 @@ export default function CustomersPage() {
           variant="outline"
           onClick={() => {
             setSearchQuery("");
-            setFilterGroup("all");
             setFilterCity("");
+            setCurrentPage(1);
           }}
         >
           Reset Filter
@@ -265,7 +381,7 @@ export default function CustomersPage() {
                   Gagal memuat data pelanggan.
                 </TableCell>
               </TableRow>
-            ) : filteredCustomers.length === 0 ? (
+            ) : customers.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={9} className="text-center h-24">
                   Tidak ada pelanggan yang cocok dengan kriteria Anda atau belum
@@ -273,19 +389,21 @@ export default function CustomersPage() {
                 </TableCell>
               </TableRow>
             ) : (
-              filteredCustomers.map((customer, index) => (
-                <TableRow key={customer.id || index}>
-                  <TableCell>{index + 1}</TableCell>
-                  <TableCell>{customer.id || "N/A"}</TableCell>
-                  <TableCell>{customer.name}</TableCell>
-                  <TableCell>{customer.phone}</TableCell>
-                  <TableCell>{customer.email}</TableCell>
-                  <TableCell>{customer.city}</TableCell>
-                  <TableCell>{customer.loyaltyPoints || 0}</TableCell>
+              customers.map((customer, index) => (
+                <TableRow key={customer.id}>
                   <TableCell>
-                    {customer.registrationDate
+                    {(currentPage - 1) * pageSize + index + 1}
+                  </TableCell>
+                  <TableCell>{customer.id}</TableCell>
+                  <TableCell>{customer.nama}</TableCell>
+                  <TableCell>{customer.noTelp}</TableCell>
+                  <TableCell>{customer.email}</TableCell>
+                  <TableCell>{customer.kota}</TableCell>
+                  <TableCell>{customer.poinLoyalitas || 0}</TableCell>
+                  <TableCell>
+                    {customer.tanggalRegistrasi
                       ? format(
-                          new Date(customer.registrationDate),
+                          new Date(customer.tanggalRegistrasi),
                           "dd MMM yyyy",
                           { locale: id }
                         )
@@ -322,15 +440,40 @@ export default function CustomersPage() {
         </Table>
       </div>
 
-      {/* V. Kontrol Paginasi - Placeholder */}
-      {/* TODO: Implement Pagination controls */}
-      {/* <div className="flex justify-center items-center space-x-2 pt-4">
-        <Button variant="outline">Pertama</Button>
-        <Button variant="outline">Sebelumnya</Button>
-        <span>Halaman X dari Y</span>
-        <Button variant="outline">Berikutnya</Button>
-        <Button variant="outline">Terakhir</Button>
-      </div> */}
+      {/* V. Kontrol Paginasi */}
+      <div className="flex justify-center items-center space-x-2 pt-4">
+        <Button
+          variant="outline"
+          onClick={handleFirstPage}
+          disabled={currentPage === 1 || isLoading}
+        >
+          <ChevronsLeft className="h-4 w-4" />
+        </Button>
+        <Button
+          variant="outline"
+          onClick={handlePreviousPage}
+          disabled={currentPage === 1 || isLoading}
+        >
+          <ChevronLeft className="h-4 w-4" />
+        </Button>
+        <span>
+          Halaman {currentPage} dari {totalPages}
+        </span>
+        <Button
+          variant="outline"
+          onClick={handleNextPage}
+          disabled={currentPage === totalPages || isLoading}
+        >
+          <ChevronRight className="h-4 w-4" />
+        </Button>
+        <Button
+          variant="outline"
+          onClick={handleLastPage}
+          disabled={currentPage === totalPages || isLoading}
+        >
+          <ChevronsRight className="h-4 w-4" />
+        </Button>
+      </div>
 
       {/* II. Dialog/Form Tambah/Edit Pelanggan */}
       <Dialog open={isAddEditDialogOpen} onOpenChange={setIsAddEditDialogOpen}>
@@ -338,7 +481,7 @@ export default function CustomersPage() {
           <DialogHeader>
             <DialogTitle>
               {selectedCustomer
-                ? `Edit Data Pelanggan: ${selectedCustomer.name}`
+                ? `Edit Data Pelanggan: ${selectedCustomer.nama}`
                 : "Tambah Pelanggan Baru"}
             </DialogTitle>
             <DialogDescription>
@@ -349,7 +492,7 @@ export default function CustomersPage() {
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
               <FormField
                 control={form.control}
-                name="name"
+                name="nama"
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Nama Pelanggan *</FormLabel>
@@ -363,7 +506,7 @@ export default function CustomersPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <FormField
                   control={form.control}
-                  name="phone"
+                  name="noTelp"
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Nomor Telepon</FormLabel>
@@ -398,7 +541,7 @@ export default function CustomersPage() {
               </div>
               <FormField
                 control={form.control}
-                name="fullAddress"
+                name="alamat"
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Alamat Lengkap</FormLabel>
@@ -415,7 +558,7 @@ export default function CustomersPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <FormField
                   control={form.control}
-                  name="city"
+                  name="kota"
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Kota</FormLabel>
@@ -428,7 +571,7 @@ export default function CustomersPage() {
                 />
                 <FormField
                   control={form.control}
-                  name="postalCode"
+                  name="kodePos"
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Kode Pos</FormLabel>
@@ -440,97 +583,27 @@ export default function CustomersPage() {
                   )}
                 />
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <FormField
-                  control={form.control}
-                  name="gender"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Jenis Kelamin</FormLabel>
-                      <Select
-                        onValueChange={field.onChange}
-                        defaultValue={field.value}
-                      >
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Pilih jenis kelamin" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value="Laki-laki">Laki-laki</SelectItem>
-                          <SelectItem value="Perempuan">Perempuan</SelectItem>
-                          <SelectItem value="Tidak Disebutkan">
-                            Tidak Disebutkan
-                          </SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="dateOfBirth"
-                  render={({ field }) => (
-                    <FormItem className="flex flex-col">
-                      <FormLabel>Tanggal Lahir</FormLabel>
-                      <Popover>
-                        <PopoverTrigger asChild>
-                          <FormControl>
-                            <Button
-                              variant={"outline"}
-                              className={`w-full pl-3 text-left font-normal ${
-                                !field.value && "text-muted-foreground"
-                              }`}
-                            >
-                              {field.value ? (
-                                format(field.value, "PPP", { locale: id })
-                              ) : (
-                                <span>Pilih tanggal lahir</span>
-                              )}
-                            </Button>
-                          </FormControl>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0" align="start">
-                          <Calendar
-                            mode="single"
-                            selected={field.value}
-                            onSelect={field.onChange}
-                            disabled={(date) =>
-                              date > new Date() || date < new Date("1900-01-01")
-                            }
-                            initialFocus
-                          />
-                        </PopoverContent>
-                      </Popover>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
               <FormField
                 control={form.control}
-                name="customerGroup"
+                name="jenisKelamin"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Grup Pelanggan</FormLabel>
+                    <FormLabel>Jenis Kelamin</FormLabel>
                     <Select
                       onValueChange={field.onChange}
-                      defaultValue={field.value}
+                      defaultValue={field.value || ""}
                     >
                       <FormControl>
                         <SelectTrigger>
-                          <SelectValue placeholder="Pilih grup pelanggan" />
+                          <SelectValue placeholder="Pilih jenis kelamin" />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        {/* TODO: Populate with actual customer groups */}
-                        <SelectItem value="Retail">Retail</SelectItem>
-                        <SelectItem value="Grosir">Grosir</SelectItem>
-                        <SelectItem value="Member Silver">
-                          Member Silver
+                        <SelectItem value="Laki-laki">Laki-laki</SelectItem>
+                        <SelectItem value="Perempuan">Perempuan</SelectItem>
+                        <SelectItem value="Tidak Disebutkan">
+                          Tidak Disebutkan
                         </SelectItem>
-                        <SelectItem value="Member Gold">Member Gold</SelectItem>
                       </SelectContent>
                     </Select>
                     <FormMessage />
@@ -539,20 +612,67 @@ export default function CustomersPage() {
               />
               <FormField
                 control={form.control}
-                name="loyaltyPoints"
+                name="tanggalRegistrasi"
                 render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Poin Loyalitas</FormLabel>
-                    <FormControl>
-                      <Input type="number" {...field} readOnly disabled />
-                    </FormControl>
+                  <FormItem className="flex flex-col">
+                    <FormLabel>Tanggal Registrasi</FormLabel>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <FormControl>
+                          <Button
+                            variant={"outline"}
+                            className={`w-full pl-3 text-left font-normal ${
+                              !field.value && "text-muted-foreground"
+                            }`}
+                          >
+                            {field.value ? (
+                              format(field.value, "dd MMM yyyy", { locale: id })
+                            ) : (
+                              <span>Pilih tanggal registrasi</span>
+                            )}
+                          </Button>
+                        </FormControl>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <Calendar
+                          mode="single"
+                          selected={field.value}
+                          onSelect={field.onChange}
+                          disabled={(date) =>
+                            date > new Date() || date < new Date("1900-01-01")
+                          }
+                          initialFocus
+                        />
+                      </PopoverContent>
+                    </Popover>
                     <FormMessage />
                   </FormItem>
                 )}
               />
+              {/* Loyalty Points - Read Only */}
+              {selectedCustomer && (
+                <FormField
+                  control={form.control}
+                  name="loyaltyPoints"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Poin Loyalitas</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="number"
+                          value={selectedCustomer.poinLoyalitas || 0}
+                          readOnly
+                          disabled
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
               <FormField
                 control={form.control}
-                name="notes"
+                name="catatan"
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Catatan Tambahan</FormLabel>
@@ -567,19 +687,29 @@ export default function CustomersPage() {
                 )}
               />
               <DialogFooter>
+                <Button
+                  type="submit"
+                  disabled={
+                    form.formState.isSubmitting ||
+                    saveCustomerMutation.isLoading
+                  }
+                >
+                  {form.formState.isSubmitting || saveCustomerMutation.isLoading
+                    ? "Menyimpan..."
+                    : "Simpan"}
+                </Button>
                 <DialogClose asChild>
                   <Button type="button" variant="outline">
                     Batal
                   </Button>
                 </DialogClose>
-                <Button type="submit">Simpan Pelanggan</Button>
               </DialogFooter>
             </form>
           </Form>
         </DialogContent>
       </Dialog>
 
-      {/* VI. Dialog Konfirmasi Hapus */}
+      {/* Dialog Konfirmasi Hapus Pelanggan */}
       <AlertDialog
         open={isDeleteDialogOpen}
         onOpenChange={setIsDeleteDialogOpen}
@@ -588,20 +718,19 @@ export default function CustomersPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>Konfirmasi Hapus Pelanggan</AlertDialogTitle>
             <AlertDialogDescription>
-              Apakah Anda yakin ingin menghapus pelanggan "
-              {selectedCustomer?.name}"? Tindakan ini tidak dapat diurungkan.
-              Riwayat transaksi pelanggan ini akan tetap tersimpan namun tidak
-              lagi terhubung ke pelanggan yang dihapus (atau sesuai kebijakan
-              Anda).
+              Anda yakin ingin menghapus pelanggan "{selectedCustomer?.nama}"?
+              Tindakan ini tidak dapat dibatalkan.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Batal</AlertDialogCancel>
+            <AlertDialogCancel disabled={deleteCustomerMutation.isLoading}>
+              Batal
+            </AlertDialogCancel>
             <AlertDialogAction
               onClick={confirmDelete}
-              className="bg-red-600 hover:bg-red-700"
+              disabled={deleteCustomerMutation.isLoading}
             >
-              Hapus
+              {deleteCustomerMutation.isLoading ? "Menghapus..." : "Hapus"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
