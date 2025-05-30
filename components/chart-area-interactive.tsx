@@ -8,7 +8,7 @@ import {
   XAxis,
   YAxis,
   Tooltip,
-} from "recharts"; // Added YAxis, Tooltip
+} from "recharts";
 import { useIsMobile } from "@/hooks/use-mobile";
 import {
   Card,
@@ -110,7 +110,7 @@ export function ChartAreaInteractive() {
   return (
     <Card className="@container/card">
       <CardHeader>
-        <CardTitle>Total Pendapatan Harian</CardTitle>
+        <CardTitle>Total Pendapatan</CardTitle>
         <CardDescription>
           Total pendapatan {formatCurrencyForTooltip(totalForPeriod)} untuk{" "}
           {getTimeRangeDescription()}

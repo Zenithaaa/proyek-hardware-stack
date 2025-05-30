@@ -131,11 +131,8 @@ export async function GET(request: NextRequest) {
         outOfStockItemsCount++;
       }
       // Logika stok menipis: stok <= stokMinimum DAN stok > 0
-      if (
-        item.stokMinimum &&
-        (item.stok ?? 0) > 0 &&
-        (item.stok ?? 0) <= (item.stokMinimum ?? 0)
-      ) {
+      // Logika stok menipis: stok < 10 DAN stok > 0
+      if ((item.stok ?? 0) > 0 && (item.stok ?? 0) < 10) {
         lowStockItemsCount++;
       }
     });
@@ -163,7 +160,7 @@ export async function GET(request: NextRequest) {
       statusStok:
         item.stok === 0
           ? "Habis"
-          : item.stokMinimum && item.stok <= item.stokMinimum
+          : (item.stok ?? 0) < 10 && (item.stok ?? 0) > 0
           ? "Menipis"
           : "Aman",
       hargaBeliSatuan: parseFloat(item.hargaBeli?.toString() ?? "0"),

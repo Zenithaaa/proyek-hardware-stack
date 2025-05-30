@@ -38,7 +38,7 @@ import {
 } from "@/components/ui/dialog";
 import { History, FileDown, Printer } from "lucide-react";
 import { DateRange } from "react-day-picker";
-import { useSearchParams, useRouter, usePathname } from 'next/navigation';
+import { useSearchParams, useRouter, usePathname } from "next/navigation";
 
 // Updated interfaces to match API response
 interface StockItem {
@@ -83,78 +83,115 @@ const initialKpis: KpiData = {
   outOfStockItemsCount: 0,
 };
 
-// Dummy data for select options - replace with actual data fetching
-// TODO: Fetch categories and suppliers from API
-const dummyKategori = [{ id: '1', nama: 'Perkakas' }, { id: '2', nama: 'Bahan Bangunan' }];
-const dummySupplier = [{ id: '1', nama: 'Supplier A' }, { id: '2', nama: 'Supplier B' }];
-
 export default function InventoryStatusPage() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+
+  const [categories, setCategories] = React.useState<
+    { id: string; nama: string }[]
+  >([]);
+  const [suppliers, setSuppliers] = React.useState<
+    { id: string; nama: string }[]
+  >([]);
 
   const [stockItems, setStockItems] = React.useState<StockItem[]>([]);
   const [kpis, setKpis] = React.useState<KpiData>(initialKpis);
   const [isLoading, setIsLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
 
-  const [currentPage, setCurrentPage] = React.useState(Number(searchParams.get('page')) || 1);
+  const [currentPage, setCurrentPage] = React.useState(
+    Number(searchParams.get("page")) || 1
+  );
   const [totalPages, setTotalPages] = React.useState(1);
-  const [limit, setLimit] = React.useState(Number(searchParams.get('limit')) || 10);
+  const [limit, setLimit] = React.useState(
+    Number(searchParams.get("limit")) || 10
+  );
 
-  const [searchTerm, setSearchTerm] = React.useState(searchParams.get('search') || '');
-  const [selectedCategoryId, setSelectedCategoryId] = React.useState(searchParams.get('categoryId') || 'semua');
-  const [selectedSupplierId, setSelectedSupplierId] = React.useState(searchParams.get('supplierId') || 'semua');
-  const [selectedStockStatus, setSelectedStockStatus] = React.useState(searchParams.get('stockStatus') || 'semua');
+  const [searchTerm, setSearchTerm] = React.useState(
+    searchParams.get("search") || ""
+  );
+  const [selectedCategoryId, setSelectedCategoryId] = React.useState(
+    searchParams.get("categoryId") || "semua"
+  );
+  const [selectedSupplierId, setSelectedSupplierId] = React.useState(
+    searchParams.get("supplierId") || "semua"
+  );
+  const [selectedStockStatus, setSelectedStockStatus] = React.useState(
+    searchParams.get("stockStatus") || "semua"
+  );
 
-  const [selectedItemForStockCard, setSelectedItemForStockCard] = React.useState<StockItem | null>(null);
-  const [stockCardMovements, setStockCardMovements] = React.useState<StockMovement[]>([]);
+  const [selectedItemForStockCard, setSelectedItemForStockCard] =
+    React.useState<StockItem | null>(null);
+  const [stockCardMovements, setStockCardMovements] = React.useState<
+    StockMovement[]
+  >([]);
   const [isStockCardLoading, setIsStockCardLoading] = React.useState(false);
-  const [stockCardDateRange, setStockCardDateRange] = React.useState<DateRange | undefined>();
+  const [stockCardDateRange, setStockCardDateRange] = React.useState<
+    DateRange | undefined
+  >();
 
-  const fetchInventoryData = React.useCallback(async (page = 1, currentLimit = 10) => {
-    setIsLoading(true);
-    setError(null);
-    const params = new URLSearchParams();
-    params.append('page', page.toString());
-    params.append('limit', currentLimit.toString());
-    if (searchTerm) params.append('search', searchTerm);
-    if (selectedCategoryId !== 'semua') params.append('categoryId', selectedCategoryId);
-    if (selectedSupplierId !== 'semua') params.append('supplierId', selectedSupplierId);
-    if (selectedStockStatus !== 'semua') params.append('stockStatus', selectedStockStatus);
+  const fetchInventoryData = React.useCallback(
+    async (page = 1, currentLimit = 10) => {
+      setIsLoading(true);
+      setError(null);
+      const params = new URLSearchParams();
+      params.append("page", page.toString());
+      params.append("limit", currentLimit.toString());
+      if (searchTerm) params.append("search", searchTerm);
+      if (selectedCategoryId !== "semua")
+        params.append("categoryId", selectedCategoryId);
+      if (selectedSupplierId !== "semua")
+        params.append("supplierId", selectedSupplierId);
+      if (selectedStockStatus !== "semua")
+        params.append("stockStatus", selectedStockStatus);
 
-    // Update URL search params without page reload, for bookmarking/sharing
-    router.push(`${pathname}?${params.toString()}`, { scroll: false });
+      // Update URL search params without page reload, for bookmarking/sharing
+      router.push(`${pathname}?${params.toString()}`, { scroll: false });
 
-    try {
-      const response = await fetch(`/api/reports/inventory-status?${params.toString()}`);
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || `Failed to fetch inventory data: ${response.statusText}`);
+      try {
+        const response = await fetch(
+          `/api/reports/inventory-status?${params.toString()}`
+        );
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(
+            errorData.error ||
+              `Failed to fetch inventory data: ${response.statusText}`
+          );
+        }
+        const result = await response.json();
+        setStockItems(result.data || []);
+        setKpis(result.kpi || initialKpis);
+        setCurrentPage(result.meta.currentPage || 1);
+        setTotalPages(result.meta.totalPages || 1);
+        // setLimit(result.meta.limit || 10); // Limit is part of request, not response meta typically
+      } catch (err: any) {
+        setError(err.message);
+        setStockItems([]);
+        setKpis(initialKpis);
+      } finally {
+        setIsLoading(false);
       }
-      const result = await response.json();
-      setStockItems(result.data || []);
-      setKpis(result.kpi || initialKpis);
-      setCurrentPage(result.meta.currentPage || 1);
-      setTotalPages(result.meta.totalPages || 1);
-      // setLimit(result.meta.limit || 10); // Limit is part of request, not response meta typically
-    } catch (err: any) {
-      setError(err.message);
-      setStockItems([]);
-      setKpis(initialKpis);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [searchTerm, selectedCategoryId, selectedSupplierId, selectedStockStatus, router, pathname]);
+    },
+    [
+      searchTerm,
+      selectedCategoryId,
+      selectedSupplierId,
+      selectedStockStatus,
+      router,
+      pathname,
+    ]
+  );
 
   React.useEffect(() => {
-    const pageFromUrl = Number(searchParams.get('page')) || 1;
-    const limitFromUrl = Number(searchParams.get('limit')) || 10;
+    const pageFromUrl = Number(searchParams.get("page")) || 1;
+    const limitFromUrl = Number(searchParams.get("limit")) || 10;
     // Update state from URL on initial load or when URL changes externally
-    setSearchTerm(searchParams.get('search') || '');
-    setSelectedCategoryId(searchParams.get('categoryId') || 'semua');
-    setSelectedSupplierId(searchParams.get('supplierId') || 'semua');
-    setSelectedStockStatus(searchParams.get('stockStatus') || 'semua');
+    setSearchTerm(searchParams.get("search") || "");
+    setSelectedCategoryId(searchParams.get("categoryId") || "semua");
+    setSelectedSupplierId(searchParams.get("supplierId") || "semua");
+    setSelectedStockStatus(searchParams.get("stockStatus") || "semua");
     setLimit(limitFromUrl);
 
     fetchInventoryData(pageFromUrl, limitFromUrl);
@@ -165,19 +202,19 @@ export default function InventoryStatusPage() {
   };
 
   const handleResetFilter = () => {
-    setSearchTerm('');
-    setSelectedCategoryId('semua');
-    setSelectedSupplierId('semua');
-    setSelectedStockStatus('semua');
+    setSearchTerm("");
+    setSelectedCategoryId("semua");
+    setSelectedSupplierId("semua");
+    setSelectedStockStatus("semua");
     // Clear URL params and fetch. fetchInventoryData will be called by useEffect due to searchParams change.
-    router.push(pathname, { scroll: false }); 
+    router.push(pathname, { scroll: false });
   };
 
   const handlePageChange = (newPage: number) => {
     if (newPage > 0 && newPage <= totalPages) {
       // fetchInventoryData will be called by useEffect due to searchParams change
       const params = new URLSearchParams(searchParams.toString());
-      params.set('page', newPage.toString());
+      params.set("page", newPage.toString());
       router.push(`${pathname}?${params.toString()}`, { scroll: false });
     }
   };
@@ -186,14 +223,17 @@ export default function InventoryStatusPage() {
     if (!itemId) return;
     setIsStockCardLoading(true);
     const params = new URLSearchParams();
-    if (dateRange?.from) params.append('startDate', dateRange.from.toISOString());
-    if (dateRange?.to) params.append('endDate', dateRange.to.toISOString());
+    if (dateRange?.from)
+      params.append("startDate", dateRange.from.toISOString());
+    if (dateRange?.to) params.append("endDate", dateRange.to.toISOString());
 
     try {
-      const response = await fetch(`/api/reports/inventory-status/${itemId}/stock-card?${params.toString()}`);
+      const response = await fetch(
+        `/api/reports/inventory-status/${itemId}/stock-card?${params.toString()}`
+      );
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to fetch stock card data');
+        throw new Error(errorData.error || "Failed to fetch stock card data");
       }
       const result = await response.json();
       setStockCardMovements(result.data || []);
@@ -213,26 +253,98 @@ export default function InventoryStatusPage() {
     }
   }, [selectedItemForStockCard, stockCardDateRange]); // Removed fetchStockCardData from deps as it's not memoized and causes loop
 
-  const handleExport = () => console.log("Exporting report..."); // TODO: Implement CSV export
+  const handleExport = () => {
+    if (stockItems.length === 0) {
+      alert("Tidak ada data untuk diekspor.");
+      return;
+    }
+
+    const headers = [
+      "Kode Barang",
+      "Nama Barang",
+      "Kategori",
+      "Supplier",
+      "Satuan",
+      "Stok Saat Ini",
+      "Stok Minimum",
+      "Status Stok",
+      "Harga Beli (Rp)",
+      "Nilai Stok HPP (Rp)",
+      "Harga Jual (Rp)",
+      "Nilai Stok Jual (Rp)",
+    ];
+
+    const csv = [headers.join(",")];
+
+    stockItems.forEach((item) => {
+      const row = [
+        `"${item.kodeBarang}"`,
+        `"${item.namaBarang}"`,
+        `"${item.kategori}"`,
+        `"${item.supplier}"`,
+        `"${item.satuan}"`,
+        item.stokSaatIni,
+        item.stokMinimum,
+        `"${item.statusStok}"`,
+        item.hargaBeliSatuan,
+        item.nilaiStokHPP,
+        item.hargaJualSatuan,
+        item.nilaiStokHargaJual,
+      ];
+      csv.push(row.join(","));
+    });
+
+    const csvString = csv.join("\n");
+    const blob = new Blob([csvString], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", "laporan_stok_barang.csv");
+    link.click();
+  };
+
   const handlePrint = () => console.log("Printing report..."); // TODO: Implement print functionality
 
-  // TODO: Fetch actual categories and suppliers for filters
-  // React.useEffect(() => {
-  //   async function fetchFilterOptions() {
-  //     // const categories = await fetch('/api/categories').then(res => res.json());
-  //     // setKategoriOptions(categories);
-  //     // const suppliers = await fetch('/api/suppliers').then(res => res.json());
-  //     // setSupplierOptions(suppliers);
-  //   }
-  //   fetchFilterOptions();
-  // }, []);
+  React.useEffect(() => {
+    async function fetchFilterOptions() {
+      try {
+        const [categoriesRes, suppliersRes] = await Promise.all([
+          fetch("/api/inventory/categories"),
+          fetch("/api/suppliers/get-all"), // Assuming this endpoint exists or will be created
+        ]);
 
-  if (isLoading && stockItems.length === 0 && currentPage === 1) { // Show loading only on initial load or full filter change
-    return <div className="container mx-auto p-4 text-center">Memuat data laporan stok...</div>;
+        if (categoriesRes.ok) {
+          const categoriesData = await categoriesRes.json();
+          setCategories(categoriesData.data || []);
+        }
+
+        if (suppliersRes.ok) {
+          const suppliersData = await suppliersRes.json();
+          setSuppliers(suppliersData.data || []);
+        }
+      } catch (error) {
+        console.error("Failed to fetch filter options:", error);
+      }
+    }
+    fetchFilterOptions();
+  }, []);
+
+  if (isLoading && stockItems.length === 0 && currentPage === 1) {
+    // Show loading only on initial load or full filter change
+    return (
+      <div className="container mx-auto p-4 text-center">
+        Memuat data laporan stok...
+      </div>
+    );
   }
 
-  if (error && stockItems.length === 0) { // Show error if loading fails and no data is present
-    return <div className="container mx-auto p-4 text-red-500 text-center">Error: {error}</div>;
+  if (error && stockItems.length === 0) {
+    // Show error if loading fails and no data is present
+    return (
+      <div className="container mx-auto p-4 text-red-500 text-center">
+        Error: {error}
+      </div>
+    );
   }
 
   return (
@@ -241,8 +353,9 @@ export default function InventoryStatusPage() {
       <div className="flex justify-between items-center">
         <h1 className="text-2xl font-semibold">Laporan Stok Barang</h1>
         <div className="space-x-2">
-          <Button variant="outline" onClick={handleExport}><FileDown className="mr-2 h-4 w-4" /> Export Laporan Stok (CSV)</Button>
-          <Button variant="outline" onClick={handlePrint}><Printer className="mr-2 h-4 w-4" /> Cetak Laporan Stok</Button>
+          <Button variant="outline" onClick={handleExport}>
+            <Printer className="mr-2 h-4 w-4" /> Cetak Laporan Stok
+          </Button>
         </div>
       </div>
 
@@ -253,30 +366,51 @@ export default function InventoryStatusPage() {
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <Input 
-              placeholder="Cari Kode Barang / Nama Barang" 
+            <Input
+              placeholder="Cari Kode Barang / Nama Barang"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              onKeyPress={(e) => e.key === 'Enter' && handleApplyFilter()} // Optional: filter on Enter
+              onKeyPress={(e) => e.key === "Enter" && handleApplyFilter()} // Optional: filter on Enter
             />
-            <Select value={selectedCategoryId} onValueChange={setSelectedCategoryId}>
-              <SelectTrigger><SelectValue placeholder="Semua Kategori" /></SelectTrigger>
+            <Select
+              value={selectedCategoryId}
+              onValueChange={setSelectedCategoryId}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Semua Kategori" />
+              </SelectTrigger>
               <SelectContent>
                 <SelectItem value="semua">Semua Kategori</SelectItem>
-                {dummyKategori.map(cat => <SelectItem key={cat.id} value={cat.id.toString()}>{cat.nama}</SelectItem>)}
-                {/* TODO: Replace dummyKategori with fetched data */}
+                {categories.map((cat) => (
+                  <SelectItem key={cat.id} value={cat.id.toString()}>
+                    {cat.nama}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
-            <Select value={selectedSupplierId} onValueChange={setSelectedSupplierId}>
-              <SelectTrigger><SelectValue placeholder="Semua Supplier" /></SelectTrigger>
+            <Select
+              value={selectedSupplierId}
+              onValueChange={setSelectedSupplierId}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Semua Supplier" />
+              </SelectTrigger>
               <SelectContent>
                 <SelectItem value="semua">Semua Supplier</SelectItem>
-                {dummySupplier.map(sup => <SelectItem key={sup.id} value={sup.id.toString()}>{sup.nama}</SelectItem>)}
-                {/* TODO: Replace dummySupplier with fetched data */}
+                {suppliers.map((sup) => (
+                  <SelectItem key={sup.id} value={sup.id.toString()}>
+                    {sup.nama}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
-            <Select value={selectedStockStatus} onValueChange={setSelectedStockStatus}>
-              <SelectTrigger><SelectValue placeholder="Semua Status Stok" /></SelectTrigger>
+            <Select
+              value={selectedStockStatus}
+              onValueChange={setSelectedStockStatus}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Semua Status Stok" />
+              </SelectTrigger>
               <SelectContent>
                 <SelectItem value="semua">Semua</SelectItem>
                 <SelectItem value="aman">Stok Aman</SelectItem>
@@ -286,8 +420,16 @@ export default function InventoryStatusPage() {
             </Select>
           </div>
           <div className="flex justify-end space-x-2">
-            <Button onClick={handleApplyFilter} disabled={isLoading}>{isLoading ? 'Memuat...' : 'Tampilkan Laporan'}</Button>
-            <Button variant="ghost" onClick={handleResetFilter} disabled={isLoading}>Reset Filter</Button>
+            <Button onClick={handleApplyFilter} disabled={isLoading}>
+              {isLoading ? "Memuat..." : "Tampilkan Laporan"}
+            </Button>
+            <Button
+              variant="ghost"
+              onClick={handleResetFilter}
+              disabled={isLoading}
+            >
+              Reset Filter
+            </Button>
           </div>
         </CardContent>
       </Card>
@@ -296,33 +438,67 @@ export default function InventoryStatusPage() {
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Item Berbeda (SKU)</CardTitle>
+            <CardTitle className="text-sm font-medium">
+              Total Item Berbeda (SKU)
+            </CardTitle>
           </CardHeader>
-          <CardContent><div className="text-2xl font-bold">{isLoading ? '-' : kpis.totalSKU}</div></CardContent>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              {isLoading ? "-" : kpis.totalSKU}
+            </div>
+          </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Nilai Inventaris (HPP)</CardTitle>
+            <CardTitle className="text-sm font-medium">
+              Total Nilai Inventaris (HPP)
+            </CardTitle>
           </CardHeader>
-          <CardContent><div className="text-2xl font-bold">{isLoading ? '-' : `Rp ${kpis.totalInventoryValueHPP.toLocaleString()}`}</div></CardContent>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              {isLoading
+                ? "-"
+                : `Rp ${kpis.totalInventoryValueHPP.toLocaleString()}`}
+            </div>
+          </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Nilai Inventaris (Harga Jual)</CardTitle>
+            <CardTitle className="text-sm font-medium">
+              Total Nilai Inventaris (Harga Jual)
+            </CardTitle>
           </CardHeader>
-          <CardContent><div className="text-2xl font-bold">{isLoading ? '-' : `Rp ${kpis.totalInventoryValueHargaJual.toLocaleString()}`}</div></CardContent>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              {isLoading
+                ? "-"
+                : `Rp ${kpis.totalInventoryValueHargaJual.toLocaleString()}`}
+            </div>
+          </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Jumlah Item Stok Menipis</CardTitle>
+            <CardTitle className="text-sm font-medium">
+              Jumlah Item Stok Menipis
+            </CardTitle>
           </CardHeader>
-          <CardContent><div className="text-2xl font-bold">{isLoading ? '-' : kpis.lowStockItemsCount}</div></CardContent>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              {isLoading ? "-" : kpis.lowStockItemsCount}
+            </div>
+          </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Jumlah Item Stok Habis</CardTitle>
+            <CardTitle className="text-sm font-medium">
+              Jumlah Item Stok Habis
+            </CardTitle>
           </CardHeader>
-          <CardContent><div className="text-2xl font-bold">{isLoading ? '-' : kpis.outOfStockItemsCount}</div></CardContent>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              {isLoading ? "-" : kpis.outOfStockItemsCount}
+            </div>
+          </CardContent>
         </Card>
       </div>
 
@@ -332,9 +508,19 @@ export default function InventoryStatusPage() {
           <CardTitle>Status Stok Saat Ini</CardTitle>
         </CardHeader>
         <CardContent>
-          {isLoading && <p className="text-center py-4">Memuat data tabel...</p>}
-          {!isLoading && error && <p className="text-center py-4 text-red-500">Gagal memuat data: {error}</p>}
-          {!isLoading && !error && stockItems.length === 0 && <p className="text-center py-4">Tidak ada data stok yang cocok dengan filter.</p>}
+          {isLoading && (
+            <p className="text-center py-4">Memuat data tabel...</p>
+          )}
+          {!isLoading && error && (
+            <p className="text-center py-4 text-red-500">
+              Gagal memuat data: {error}
+            </p>
+          )}
+          {!isLoading && !error && stockItems.length === 0 && (
+            <p className="text-center py-4">
+              Tidak ada data stok yang cocok dengan filter.
+            </p>
+          )}
           {!isLoading && !error && stockItems.length > 0 && (
             <Table>
               <TableHeader>
@@ -348,9 +534,13 @@ export default function InventoryStatusPage() {
                   <TableHead className="text-right">Stok Minimum</TableHead>
                   <TableHead>Status Stok</TableHead>
                   <TableHead className="text-right">Harga Beli (Rp)</TableHead>
-                  <TableHead className="text-right">Nilai Stok HPP (Rp)</TableHead>
+                  <TableHead className="text-right">
+                    Nilai Stok HPP (Rp)
+                  </TableHead>
                   <TableHead className="text-right">Harga Jual (Rp)</TableHead>
-                  <TableHead className="text-right">Nilai Stok Jual (Rp)</TableHead>
+                  <TableHead className="text-right">
+                    Nilai Stok Jual (Rp)
+                  </TableHead>
                   <TableHead className="text-center">Aksi</TableHead>
                 </TableRow>
               </TableHeader>
@@ -362,22 +552,40 @@ export default function InventoryStatusPage() {
                     <TableCell>{item.kategori}</TableCell>
                     <TableCell>{item.supplier}</TableCell>
                     <TableCell>{item.satuan}</TableCell>
-                    <TableCell className="text-right">{item.stokSaatIni}</TableCell>
-                    <TableCell className="text-right">{item.stokMinimum}</TableCell>
+                    <TableCell className="text-right">
+                      {item.stokSaatIni}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {item.stokMinimum}
+                    </TableCell>
                     <TableCell>
-                      <span className={`px-2 py-1 text-xs font-semibold rounded-full 
-                        ${item.statusStok === "Aman" ? "bg-green-100 text-green-800" : 
-                          item.statusStok === "Menipis" ? "bg-yellow-100 text-yellow-800" : 
-                          "bg-red-100 text-red-800"}`}>
+                      <span
+                        className={`px-2 py-1 text-xs font-semibold rounded-full 
+                        ${
+                          item.stokSaatIni === 0
+                            ? "bg-red-100 text-red-800"
+                            : item.stokSaatIni < 10
+                            ? "bg-yellow-100 text-yellow-800"
+                            : "bg-green-100 text-green-800"
+                        }`}
+                      >
                         {item.statusStok}
                       </span>
                     </TableCell>
-                    <TableCell className="text-right">{item.hargaBeliSatuan.toLocaleString()}</TableCell>
-                    <TableCell className="text-right">{item.nilaiStokHPP.toLocaleString()}</TableCell>
-                    <TableCell className="text-right">{item.hargaJualSatuan.toLocaleString()}</TableCell>
-                    <TableCell className="text-right">{item.nilaiStokHargaJual.toLocaleString()}</TableCell>
+                    <TableCell className="text-right">
+                      {item.hargaBeliSatuan.toLocaleString()}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {item.nilaiStokHPP.toLocaleString()}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {item.hargaJualSatuan.toLocaleString()}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {item.nilaiStokHargaJual.toLocaleString()}
+                    </TableCell>
                     <TableCell className="text-center">
-                      <Dialog 
+                      <Dialog
                         open={selectedItemForStockCard?.id === item.id}
                         onOpenChange={(open) => {
                           if (open) {
@@ -397,47 +605,86 @@ export default function InventoryStatusPage() {
                         {selectedItemForStockCard && (
                           <DialogContent className="max-w-3xl">
                             <DialogHeader>
-                              <DialogTitle>Kartu Stok: {selectedItemForStockCard.namaBarang} ({selectedItemForStockCard.kodeBarang})</DialogTitle>
+                              <DialogTitle>
+                                Kartu Stok:{" "}
+                                {selectedItemForStockCard.namaBarang} (
+                                {selectedItemForStockCard.kodeBarang})
+                              </DialogTitle>
                             </DialogHeader>
                             <div className="space-y-4 py-4">
-                              <DatePickerWithRange 
-                                date={stockCardDateRange} 
+                              <DatePickerWithRange
+                                date={stockCardDateRange}
                                 onDateChange={(range) => {
                                   setStockCardDateRange(range);
                                   // fetchStockCardData will be called by useEffect
-                                }} 
-                                className="max-w-sm" 
+                                }}
+                                className="max-w-sm"
                               />
-                              {isStockCardLoading && <p className="text-center py-2">Memuat kartu stok...</p>}
-                              {!isStockCardLoading && stockCardMovements.length === 0 && <p className="text-center py-2">Tidak ada pergerakan stok untuk periode ini atau item ini.</p>}
-                              {!isStockCardLoading && stockCardMovements.length > 0 && (
-                                <div className="max-h-96 overflow-y-auto">
-                                  <Table>
-                                    <TableHeader>
-                                      <TableRow>
-                                        <TableHead>Tanggal</TableHead>
-                                        <TableHead>No. Referensi</TableHead>
-                                        <TableHead>Jenis Transaksi</TableHead>
-                                        <TableHead className="text-right">Masuk</TableHead>
-                                        <TableHead className="text-right">Keluar</TableHead>
-                                        <TableHead className="text-right">Saldo Akhir</TableHead>
-                                      </TableRow>
-                                    </TableHeader>
-                                    <TableBody>
-                                      {stockCardMovements.map((move, index) => (
-                                        <TableRow key={`${move.noReferensi}-${index}-${move.tanggal}`}>
-                                          <TableCell>{new Date(move.tanggal).toLocaleDateString()}</TableCell>
-                                          <TableCell>{move.noReferensi}</TableCell>
-                                          <TableCell>{move.jenisTransaksi}</TableCell>
-                                          <TableCell className="text-right">{move.kuantitasMasuk ?? "-"}</TableCell>
-                                          <TableCell className="text-right">{move.kuantitasKeluar ?? "-"}</TableCell>
-                                          <TableCell className="text-right">{move.saldoAkhir}</TableCell>
-                                        </TableRow>
-                                      ))}
-                                    </TableBody>
-                                  </Table>
-                                </div>
+                              {isStockCardLoading && (
+                                <p className="text-center py-2">
+                                  Memuat kartu stok...
+                                </p>
                               )}
+                              {!isStockCardLoading &&
+                                stockCardMovements.length === 0 && (
+                                  <p className="text-center py-2">
+                                    Tidak ada pergerakan stok untuk periode ini
+                                    atau item ini.
+                                  </p>
+                                )}
+                              {!isStockCardLoading &&
+                                stockCardMovements.length > 0 && (
+                                  <div className="max-h-96 overflow-y-auto">
+                                    <Table>
+                                      <TableHeader>
+                                        <TableRow>
+                                          <TableHead>Tanggal</TableHead>
+                                          <TableHead>No. Referensi</TableHead>
+                                          <TableHead>Jenis Transaksi</TableHead>
+                                          <TableHead className="text-right">
+                                            Masuk
+                                          </TableHead>
+                                          <TableHead className="text-right">
+                                            Keluar
+                                          </TableHead>
+                                          <TableHead className="text-right">
+                                            Saldo Akhir
+                                          </TableHead>
+                                        </TableRow>
+                                      </TableHeader>
+                                      <TableBody>
+                                        {stockCardMovements.map(
+                                          (move, index) => (
+                                            <TableRow
+                                              key={`${move.noReferensi}-${index}-${move.tanggal}`}
+                                            >
+                                              <TableCell>
+                                                {new Date(
+                                                  move.tanggal
+                                                ).toLocaleDateString()}
+                                              </TableCell>
+                                              <TableCell>
+                                                {move.noReferensi}
+                                              </TableCell>
+                                              <TableCell>
+                                                {move.jenisTransaksi}
+                                              </TableCell>
+                                              <TableCell className="text-right">
+                                                {move.kuantitasMasuk ?? "-"}
+                                              </TableCell>
+                                              <TableCell className="text-right">
+                                                {move.kuantitasKeluar ?? "-"}
+                                              </TableCell>
+                                              <TableCell className="text-right">
+                                                {move.saldoAkhir}
+                                              </TableCell>
+                                            </TableRow>
+                                          )
+                                        )}
+                                      </TableBody>
+                                    </Table>
+                                  </div>
+                                )}
                             </div>
                           </DialogContent>
                         )}
@@ -456,24 +703,38 @@ export default function InventoryStatusPage() {
         <Pagination>
           <PaginationContent>
             <PaginationItem>
-              <PaginationPrevious 
-                href="#" 
-                onClick={(e) => { e.preventDefault(); handlePageChange(currentPage - 1); }}
-                className={currentPage === 1 ? "pointer-events-none opacity-50" : undefined}
+              <PaginationPrevious
+                href="#"
+                onClick={(e) => {
+                  e.preventDefault();
+                  handlePageChange(currentPage - 1);
+                }}
+                className={
+                  currentPage === 1
+                    ? "pointer-events-none opacity-50"
+                    : undefined
+                }
                 aria-disabled={currentPage === 1}
               />
             </PaginationItem>
-            {/* Simple Pagination: Show current page and a few around it */} 
-            {/* For more complex pagination, consider a helper function to generate page numbers */} 
+            {/* Simple Pagination: Show current page and a few around it */}
+            {/* For more complex pagination, consider a helper function to generate page numbers */}
             {[...Array(totalPages)].map((_, i) => {
               const pageNum = i + 1;
               // Basic logic to show limited page numbers: first, last, current, and 2 around current
-              if (pageNum === 1 || pageNum === totalPages || (pageNum >= currentPage - 1 && pageNum <= currentPage + 1)) {
+              if (
+                pageNum === 1 ||
+                pageNum === totalPages ||
+                (pageNum >= currentPage - 1 && pageNum <= currentPage + 1)
+              ) {
                 return (
                   <PaginationItem key={pageNum}>
-                    <PaginationLink 
-                      href="#" 
-                      onClick={(e) => { e.preventDefault(); handlePageChange(pageNum); }}
+                    <PaginationLink
+                      href="#"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        handlePageChange(pageNum);
+                      }}
                       isActive={currentPage === pageNum}
                     >
                       {pageNum}
@@ -488,10 +749,17 @@ export default function InventoryStatusPage() {
               return null;
             })}
             <PaginationItem>
-              <PaginationNext 
-                href="#" 
-                onClick={(e) => { e.preventDefault(); handlePageChange(currentPage + 1); }}
-                className={currentPage === totalPages ? "pointer-events-none opacity-50" : undefined}
+              <PaginationNext
+                href="#"
+                onClick={(e) => {
+                  e.preventDefault();
+                  handlePageChange(currentPage + 1);
+                }}
+                className={
+                  currentPage === totalPages
+                    ? "pointer-events-none opacity-50"
+                    : undefined
+                }
                 aria-disabled={currentPage === totalPages}
               />
             </PaginationItem>
