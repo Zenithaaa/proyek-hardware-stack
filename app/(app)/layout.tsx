@@ -16,8 +16,12 @@ const DashboardLayout = ({ children }: { children: React.ReactNode }) => {
         return "Daftar Transaksi Penjualan";
       case "/purchases":
         return "Daftar Transaksi Pembelian";
-      case "/inventory":
-        return "Daftar Inventaris";
+      case "/inventory/items/new":
+        return "Daftar Barang Inventaris";
+      case "/inventory/category":
+        return "Manajemen Kategori Barang";
+      case "/inventory/stock-adjustments":
+        return "Penyesuaian Stok";
       case "/customers":
         return "Daftar Pelanggan";
       case "/reports/inventory-status":

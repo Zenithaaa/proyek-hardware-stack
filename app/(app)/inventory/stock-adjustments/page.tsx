@@ -72,17 +72,32 @@ const jenisPenyesuaianOptions = [
   { value: "Retur Beli (Manual)", label: "Retur Beli (Manual)" },
 ];
 
+interface Item {
+  id: string;
+  nama: string;
+  stok: number;
+}
+
 export default function StockAdjustmentsPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState<Item | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [itemSearchQuery, setItemSearchQuery] = useState(""); // Add new state for item search
   const [dateRange, setDateRange] = useState({
-    from: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
+    from: new Date(
+      new Date().getFullYear() - 1,
+      new Date().getMonth(),
+      new Date().getDate()
+    ), // Default to one year ago
     to: new Date(),
   });
   const [selectedJenisPenyesuaian, setSelectedJenisPenyesuaian] =
     useState("all");
+
+  // Pagination state
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [totalAdjustments, setTotalAdjustments] = useState(0);
 
   const form = useForm({
     defaultValues: {
@@ -121,12 +136,14 @@ export default function StockAdjustmentsPage() {
       dateRange,
       selectedJenisPenyesuaian,
       searchQuery,
+      page, // Add page to queryKey
+      pageSize, // Add pageSize to queryKey
     ],
     queryFn: async () => {
       const params = new URLSearchParams({
         startDate: dateRange.from.toISOString(),
         endDate: dateRange.to.toISOString(),
-        searchQuery,
+        ...(searchQuery && { searchQuery }), // Only add searchQuery if it's not empty
         ...(selectedJenisPenyesuaian !== "all" && {
           jenisPenyesuaian: selectedJenisPenyesuaian,
         }),
@@ -139,9 +156,16 @@ export default function StockAdjustmentsPage() {
           credentials: "include",
         }
       );
-      if (!response.ok) throw new Error("Failed to fetch adjustments");
-      const data = await response.json();
-      return data;
+      if (!response.ok) {
+        setTotalAdjustments(0); // Reset total if fetch fails
+        return { data: [], total: 0 };
+      }
+      const result = await response.json();
+      console.log("API Response Total Count:", result.meta.totalCount); // Log total count
+      setTotalAdjustments(
+        isNaN(result.meta.totalCount) ? 0 : result.meta.totalCount
+      ); // Update totalAdjustments
+      return result;
     },
   });
 
@@ -163,6 +187,7 @@ export default function StockAdjustmentsPage() {
 
       setIsDialogOpen(false);
       form.reset();
+      setPage(1); // Reset to first page after successful submission
     } catch (error) {
       toast.error("Gagal menyimpan penyesuaian stok", {
         description: error.message,
@@ -278,6 +303,81 @@ export default function StockAdjustmentsPage() {
         </Table>
       </div>
 
+      {/* Pagination */}
+      <div className="flex items-center justify-between px-2">
+        <div className="flex-1 text-sm text-muted-foreground">
+          {/* You can add selected row info here if needed */}
+        </div>
+        <div className="flex items-center space-x-6 lg:space-x-8">
+          <div className="flex items-center space-x-2">
+            <p className="text-sm font-medium">Rows per page</p>
+            <Select
+              value={pageSize.toString()}
+              onValueChange={(value) => {
+                setPageSize(Number(value));
+                setPage(1); // Reset to first page when page size changes
+              }}
+            >
+              <SelectTrigger className="h-8 w-[70px]">
+                <SelectValue placeholder={pageSize} />
+              </SelectTrigger>
+              <SelectContent side="top">
+                {[10, 20, 30, 40, 50].map((size) => (
+                  <SelectItem key={size} value={size.toString()}>
+                    {size}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex w-[100px] items-center justify-center text-sm font-medium">
+            Page {page} of {Math.ceil(totalAdjustments / pageSize)}
+          </div>
+          <div className="flex items-center space-x-2">
+            <Button
+              variant="outline"
+              className="hidden h-8 w-8 p-0 lg:flex"
+              onClick={() => setPage(1)}
+              disabled={page <= 1}
+            >
+              <span className="sr-only">Go to first page</span>
+              {/* First page icon */}
+              &laquo;
+            </Button>
+            <Button
+              variant="outline"
+              className="h-8 w-8 p-0"
+              onClick={() => setPage((prev) => Math.max(1, prev - 1))}
+              disabled={page <= 1}
+            >
+              <span className="sr-only">Go to previous page</span>
+              {/* Previous page icon */}
+              &lt;
+            </Button>
+            <Button
+              variant="outline"
+              className="h-8 w-8 p-0"
+              onClick={() => setPage((prev) => prev + 1)}
+              disabled={page * pageSize >= totalAdjustments}
+            >
+              <span className="sr-only">Go to next page</span>
+              {/* Next page icon */}
+              &gt;
+            </Button>
+            <Button
+              variant="outline"
+              className="hidden h-8 w-8 p-0 lg:flex"
+              onClick={() => setPage(Math.ceil(totalAdjustments / pageSize))}
+              disabled={page * pageSize >= totalAdjustments}
+            >
+              <span className="sr-only">Go to last page</span>
+              {/* Last page icon */}
+              &raquo;
+            </Button>
+          </div>
+        </div>
+      </div>
+
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
@@ -341,7 +441,6 @@ export default function StockAdjustmentsPage() {
                   </FormItem>
                 )}
               />
-
               <FormField
                 control={form.control}
                 name="tanggal"
@@ -379,7 +478,6 @@ export default function StockAdjustmentsPage() {
                   </FormItem>
                 )}
               />
-
               <FormField
                 control={form.control}
                 name="nomorReferensi"
@@ -393,7 +491,6 @@ export default function StockAdjustmentsPage() {
                   </FormItem>
                 )}
               />
-
               <FormField
                 control={form.control}
                 name="jenisPenyesuaian"
@@ -421,13 +518,11 @@ export default function StockAdjustmentsPage() {
                   </FormItem>
                 )}
               />
-
               {selectedItem && (
                 <div className="rounded-lg border p-3 text-sm">
                   <p>Stok Saat Ini: {selectedItem.stok}</p>
                 </div>
               )}
-
               {form.watch("jenisPenyesuaian") === "Stok Opname" ? (
                 <FormField
                   control={form.control}
@@ -485,7 +580,6 @@ export default function StockAdjustmentsPage() {
                       </FormItem>
                     )}
                   />
-
                   <FormField
                     control={form.control}
                     name="jumlah"
@@ -508,7 +602,6 @@ export default function StockAdjustmentsPage() {
                   />
                 </>
               )}
-
               <FormField
                 control={form.control}
                 name="keterangan"
@@ -522,7 +615,6 @@ export default function StockAdjustmentsPage() {
                   </FormItem>
                 )}
               />
-
               <DialogFooter>
                 <Button
                   type="button"

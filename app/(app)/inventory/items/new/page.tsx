@@ -75,8 +75,8 @@ import { Label } from "@/components/ui/label";
 interface Item {
   id: number;
   nama: string;
-  kategori?: { id: number; nama: string };
-  supplier?: { id: number; nama: string };
+  kategori?: { id: number; nama: string } | null;
+  supplier?: { id: number; nama: string } | null;
   hargaJual: number;
   hargaBeli?: number;
   stok: number;
@@ -143,6 +143,7 @@ export default function InventoryItemsPage() {
           selectedSupplier !== "all" ? Number(selectedSupplier) : undefined,
         statusStok: selectedStockStatus as "all" | "low" | "out" | "normal",
       }),
+    keepPreviousData: true,
   });
 
   // Fetch kategori

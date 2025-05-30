@@ -50,6 +50,7 @@ export async function GET(request: NextRequest) {
     }
 
     const totalCount = await prisma.penyesuaianStok.count({ where });
+    console.log("API Total Count:", totalCount); // Log total count
     const adjustments = await prisma.penyesuaianStok.findMany({
       where,
       include: {
