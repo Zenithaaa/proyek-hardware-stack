@@ -84,7 +84,7 @@ const customerFormSchema = z.object({
     .string()
     .email({ message: "Format email tidak valid." })
     .optional()
-    .or(z.literal("")), // Allow empty string
+    .or(z.literal("")),
   alamat: z.string().optional(),
   kota: z.string().optional(),
   kodePos: z.string().optional(),
@@ -104,6 +104,8 @@ interface Customer {
   email: string | null;
   poinLoyalitas: number | null;
   tanggalRegistrasi: Date | null;
+  kota: string | null;
+  kodePos: string | null;
   // Add other fields from your schema if needed
 }
 
@@ -183,7 +185,17 @@ export default function CustomersPage() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(customerData),
+        body: JSON.stringify({
+          nama: customerData.nama,
+          noTelp: customerData.noTelp,
+          email: customerData.email,
+          alamat: customerData.alamat,
+          kota: customerData.kota,
+          kodePos: customerData.kodePos,
+          jenisKelamin: customerData.jenisKelamin,
+          tanggalRegistrasi: customerData.tanggalRegistrasi,
+          catatan: customerData.catatan,
+        }),
       });
 
       if (!response.ok) {
@@ -360,6 +372,7 @@ export default function CustomersPage() {
               <TableHead>Nomor Telepon</TableHead>
               <TableHead>Email</TableHead>
               <TableHead>Kota</TableHead>
+              <TableHead>Kode Pos</TableHead>
               <TableHead>Poin Loyalitas</TableHead>
               <TableHead>Tgl. Registrasi</TableHead>
               <TableHead className="text-right">Aksi</TableHead>
@@ -399,6 +412,7 @@ export default function CustomersPage() {
                   <TableCell>{customer.noTelp}</TableCell>
                   <TableCell>{customer.email}</TableCell>
                   <TableCell>{customer.kota}</TableCell>
+                  <TableCell>{customer.kodePos}</TableCell>
                   <TableCell>{customer.poinLoyalitas || 0}</TableCell>
                   <TableCell>
                     {customer.tanggalRegistrasi
@@ -424,7 +438,7 @@ export default function CustomersPage() {
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>
-                    {/* TODO: Implement View Transaction History */}
+                    {/* TODO: Implement View Transaction History 
                     <Button
                       variant="ghost"
                       size="icon"
@@ -432,6 +446,7 @@ export default function CustomersPage() {
                     >
                       <History className="h-4 w-4" />
                     </Button>
+                    */}
                   </TableCell>
                 </TableRow>
               ))
@@ -441,38 +456,65 @@ export default function CustomersPage() {
       </div>
 
       {/* V. Kontrol Paginasi */}
-      <div className="flex justify-center items-center space-x-2 pt-4">
-        <Button
-          variant="outline"
-          onClick={handleFirstPage}
-          disabled={currentPage === 1 || isLoading}
-        >
-          <ChevronsLeft className="h-4 w-4" />
-        </Button>
-        <Button
-          variant="outline"
-          onClick={handlePreviousPage}
-          disabled={currentPage === 1 || isLoading}
-        >
-          <ChevronLeft className="h-4 w-4" />
-        </Button>
-        <span>
-          Halaman {currentPage} dari {totalPages}
-        </span>
-        <Button
-          variant="outline"
-          onClick={handleNextPage}
-          disabled={currentPage === totalPages || isLoading}
-        >
-          <ChevronRight className="h-4 w-4" />
-        </Button>
-        <Button
-          variant="outline"
-          onClick={handleLastPage}
-          disabled={currentPage === totalPages || isLoading}
-        >
-          <ChevronsRight className="h-4 w-4" />
-        </Button>
+      <div className="flex justify-end items-center space-x-2 pt-4">
+        {/* Pagination controls */}
+        {/* Rows per page control */}
+        <div className="flex items-center space-x-2">
+          <p className="text-sm font-medium">Rows per page</p>
+          <Select
+            value={pageSize.toString()}
+            onValueChange={(value) => {
+              setPageSize(Number(value));
+              setCurrentPage(1); // Reset to first page when page size changes
+            }}
+          >
+            <SelectTrigger className="h-8 w-[70px]">
+              <SelectValue placeholder={pageSize} />
+            </SelectTrigger>
+            <SelectContent side="top">
+              {[10, 20, 30, 40, 50].map((size) => (
+                <SelectItem key={size} value={size.toString()}>
+                  {size}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        {/* End Rows per page control */}
+        <div className="flex items-center space-x-2">
+          <span className="font-medium text-sm">
+            Page {currentPage} dari {totalPages}
+          </span>
+          <Button
+            variant="outline"
+            onClick={handleFirstPage}
+            disabled={currentPage === 1 || isLoading}
+          >
+            <ChevronsLeft className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="outline"
+            onClick={handlePreviousPage}
+            disabled={currentPage === 1 || isLoading}
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="outline"
+            onClick={handleNextPage}
+            disabled={currentPage === totalPages || isLoading}
+          >
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="outline"
+            onClick={handleLastPage}
+            disabled={currentPage === totalPages || isLoading}
+          >
+            <ChevronsRight className="h-4 w-4" />
+          </Button>
+        </div>
+        {/* End Pagination controls */}
       </div>
 
       {/* II. Dialog/Form Tambah/Edit Pelanggan */}
@@ -670,22 +712,6 @@ export default function CustomersPage() {
                   )}
                 />
               )}
-              <FormField
-                control={form.control}
-                name="catatan"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Catatan Tambahan</FormLabel>
-                    <FormControl>
-                      <Textarea
-                        placeholder="Masukkan catatan tambahan"
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
               <DialogFooter>
                 <Button
                   type="submit"

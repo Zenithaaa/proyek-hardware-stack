@@ -24,6 +24,8 @@ import { DatePickerWithRange } from "@/components/ui/date-picker-with-range"; //
 // import { PageHeader } from '@/components/shared/PageHeader'; // Assuming this component exists or will be created
 import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
+import { exportToExcel } from "@/lib/utils/excel";
+import { toast } from "sonner";
 
 // Placeholder for data types - replace with actual types from your schema
 type Customer = { id: string; nama: string }; // Adjusted to match Pelanggan model
@@ -103,14 +105,14 @@ export default function SalesReportPage() {
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [selectedItem, setSelectedItem] = useState<string>("all");
   const [page, setPage] = useState(1);
-  const [limit, setLimit] = useState(10);
+  const [pageSize, setPageSize] = useState(10); // New state for page size
 
   // Fetch sales data using react-query
   const { data, isLoading, error, refetch } = useQuery<SalesReportResponse>({
     queryKey: [
       "salesReport",
       page,
-      limit,
+      pageSize, // Include pageSize in queryKey
       dateRange,
       selectedCustomer,
       selectedCategory,
@@ -119,7 +121,7 @@ export default function SalesReportPage() {
     queryFn: async () => {
       const params = new URLSearchParams();
       params.append("page", page.toString());
-      params.append("limit", limit.toString());
+      params.append("limit", pageSize.toString()); // Use pageSize as limit
       if (dateRange?.from)
         params.append("fromDate", format(dateRange.from, "yyyy-MM-dd"));
       if (dateRange?.to)
@@ -148,9 +150,29 @@ export default function SalesReportPage() {
   const transactions = data?.data || [];
   const totalTransactions = data?.total || 0;
 
-  const handleExport = () => {
-    console.log("Exporting report...");
-    // Implement CSV/Excel export logic here, potentially calling a new API endpoint
+  const handleExport = async () => {
+    try {
+      if (transactions.length === 0) {
+        toast.info("Tidak ada data transaksi untuk diekspor.");
+        return;
+      }
+      const blob = await exportToExcel(transactions);
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `laporan_penjualan_${format(
+        new Date(),
+        "yyyyMMdd_HHmmss"
+      )}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+      toast.success("Laporan penjualan berhasil diekspor ke Excel.");
+    } catch (error) {
+      console.error("Failed to export sales report:", error);
+      toast.error("Gagal mengekspor laporan penjualan.");
+    }
   };
 
   const handlePrint = () => {
@@ -208,16 +230,16 @@ export default function SalesReportPage() {
         {/* <PageHeader title="Laporan Penjualan" /> */}
         <h1 className="text-2xl font-bold">Laporan Penjualan</h1>
         <div className="flex space-x-2">
+          <Button onClick={handleExport} variant="outline">
+            <Download className="mr-2 h-4 w-4" />
+            Export Laporan (Excel)
+          </Button>
           {/*
-            <Button onClick={handleExport} variant="outline">
-              <Download className="mr-2 h-4 w-4" />
-              Export Laporan (CSV)
+            <Button onClick={handlePrint} variant="outline">
+              <Printer className="mr-2 h-4 w-4" />
+              Cetak Laporan
             </Button>
           */}
-          <Button onClick={handlePrint} variant="outline">
-            <Printer className="mr-2 h-4 w-4" />
-            Cetak Laporan
-          </Button>
         </div>
       </div>
 
@@ -408,7 +430,9 @@ export default function SalesReportPage() {
                   <TableHead className="text-right">Biaya Kirim</TableHead>
                   <TableHead className="text-right">Grand Total</TableHead>
                   <TableHead>Status</TableHead>
+                  {/*
                   <TableHead>Aksi</TableHead>
+                  */}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -466,11 +490,13 @@ export default function SalesReportPage() {
                         {tx.statusTransaksi}
                       </span>
                     </TableCell>
+                    {/*
                     <TableCell>
                       <Button variant="outline" size="sm">
                         Lihat Detail
                       </Button>
                     </TableCell>
+                    */}
                   </TableRow>
                 ))}
               </TableBody>
@@ -478,30 +504,83 @@ export default function SalesReportPage() {
           ) : (
             <div className="text-center">Tidak ada data transaksi.</div>
           )}
-
-          {/* Add pagination controls here */}
-          {totalTransactions > 0 && (
-            <div className="flex justify-center mt-4">
-              {/* Basic Pagination Controls - Replace with a proper component */}
-              <Button
-                variant="outline"
-                onClick={() => setPage((prev) => Math.max(prev - 1, 1))}
-                disabled={page === 1 || isLoading}
-                className="mr-2"
-              >
-                Sebelumnya
-              </Button>
-              <span className="self-center">
-                Halaman {page} dari {Math.ceil(totalTransactions / limit)}
-              </span>
-              <Button
-                variant="outline"
-                onClick={() => setPage((prev) => prev + 1)}
-                disabled={page * limit >= totalTransactions || isLoading}
-                className="ml-2"
-              >
-                Berikutnya
-              </Button>
+          {/* Pagination Controls */}
+          {transactions.length > 0 && (
+            <div className="flex items-center justify-end space-x-2 py-4">
+              <div className="flex items-center space-x-2">
+                <p className="text-sm font-medium">Rows per page</p>
+                <Select
+                  value={pageSize.toString()}
+                  onValueChange={(value) => {
+                    setPageSize(Number(value));
+                    setPage(1); // Reset to first page when page size changes
+                  }}
+                >
+                  <SelectTrigger className="h-8 w-[70px]">
+                    <SelectValue placeholder={pageSize} />
+                  </SelectTrigger>
+                  <SelectContent side="top">
+                    {[5, 10, 20, 50, 100].map((size) => (
+                      <SelectItem key={size} value={size.toString()}>
+                        {size}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex w-[100px] items-center justify-center text-sm font-medium">
+                Page {page} of {Math.ceil(totalTransactions / pageSize)}
+              </div>
+              <div className="flex items-center space-x-2">
+                <Button
+                  variant="outline"
+                  className="hidden h-8 w-8 p-0 lg:flex"
+                  onClick={() => setPage(1)}
+                  disabled={page === 1}
+                >
+                  <span className="sr-only">Go to first page</span>
+                  {"<<"}
+                </Button>
+                <Button
+                  variant="outline"
+                  className="h-8 w-8 p-0"
+                  onClick={() => setPage((prev) => Math.max(1, prev - 1))}
+                  disabled={page === 1}
+                >
+                  <span className="sr-only">Go to previous page</span>
+                  {/* <ChevronLeftIcon className="h-4 w-4" /> */}
+                  {"<"}
+                </Button>
+                <Button
+                  variant="outline"
+                  className="h-8 w-8 p-0"
+                  onClick={() =>
+                    setPage((prev) =>
+                      Math.min(
+                        Math.ceil(totalTransactions / pageSize),
+                        prev + 1
+                      )
+                    )
+                  }
+                  disabled={page === Math.ceil(totalTransactions / pageSize)}
+                >
+                  <span className="sr-only">Go to next page</span>
+                  {/* <ChevronRightIcon className="h-4 w-4" /> */}
+                  {">"}
+                </Button>
+                <Button
+                  variant="outline"
+                  className="hidden h-8 w-8 p-0 lg:flex"
+                  onClick={() =>
+                    setPage(Math.ceil(totalTransactions / pageSize))
+                  }
+                  disabled={page === Math.ceil(totalTransactions / pageSize)}
+                >
+                  <span className="sr-only">Go to last page</span>
+                  {/* <DoubleArrowRightIcon className="h-4 w-4" /> */}
+                  {">>"}
+                </Button>
+              </div>
             </div>
           )}
         </CardContent>

@@ -91,28 +91,32 @@ export const importFromExcel = async (file: File) => {
 };
 
 // Fungsi untuk mengexport data ke Excel
-export const exportToExcel = async () => {
-  try {
-    // Ambil semua data item dengan relasi
-    const items = await prisma.item.findMany({
-      include: {
-        kategori: true,
-        supplier: true,
-      },
-    });
+import { TransaksiPenjualan } from "@/app/(app)/reports/sales-summary/page";
+import { format } from "date-fns";
 
-    // Format data untuk Excel
-    const excelData = items.map((item) => ({
-      "Kode Barcode": item.kodeBarcode || "",
-      "Nama Barang": item.nama,
-      Kategori: item.kategori?.nama || "",
-      Supplier: item.supplier?.nama || "",
-      "Harga Beli": Number(item.hargaBeli) || 0,
-      "Harga Jual": Number(item.hargaJual),
-      Stok: item.stok,
-      "Stok Minimum": item.stokMinimum || 0,
-      Satuan: item.satuan || "Pcs",
-      Manufacture: item.manufacture || "",
+export const exportToExcel = async (transactions: TransaksiPenjualan[]) => {
+  try {
+    const excelData = transactions.map((tx) => ({
+      "No. Struk": tx.nomorStruk,
+      "Tanggal & Waktu": format(
+        new Date(tx.tanggalWaktuTransaksi),
+        "yyyy-MM-dd HH:mm"
+      ),
+      "Nama Barang": tx.detailTransaksiPenjualan
+        .map((detail) => detail.item.nama)
+        .join(", "),
+      "Kategori Barang": tx.detailTransaksiPenjualan
+        .map((detail) => detail.item.kategori.nama)
+        .join(", "),
+      Pelanggan: tx.pelanggan?.nama || "Umum",
+      Kasir: tx.userId, // TODO: Fetch actual cashier name
+      "Metode Pembayaran": tx.pembayaranTransaksi[0]?.metodePembayaran || "-",
+      Subtotal: tx.subtotalSebelumDiskonPajak,
+      Diskon: tx.totalDiskonTransaksi || 0,
+      Pajak: tx.totalPajak || 0,
+      "Biaya Kirim": tx.biayaPengiriman || 0,
+      "Grand Total": tx.grandTotal,
+      Status: tx.statusTransaksi,
     }));
 
     // Buat workbook dan worksheet

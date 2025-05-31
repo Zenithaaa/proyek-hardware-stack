@@ -2,7 +2,21 @@
 
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { FilePlus2, Eye, Pencil, XCircle, Truck, Search } from "lucide-react";
+import { toast } from "sonner";
+import {
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
+  Eye,
+  FilePlus2,
+  Pencil,
+  PlusCircle,
+  Search,
+  Trash,
+  Truck,
+  XCircle,
+} from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,6 +28,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { PageHeader } from "@/components/shared/PageHeader";
+import { Badge } from "@/components/ui/badge";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -24,9 +40,9 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Badge } from "@/components/ui/badge";
+
 import { DatePickerWithRange } from "@/components/ui/date-picker-with-range";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Select,
   SelectContent,
@@ -38,31 +54,6 @@ import { format } from "date-fns";
 import { id } from "date-fns/locale";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-
-// Dummy data untuk contoh tampilan
-// const dummyPurchaseOrders = [
-//   {
-//     id: 1,
-//     nomorPO: "PO-2023-001",
-//     tanggalPesan: new Date("2023-06-01"),
-//     namaSupplier: "PT Supplier Utama",
-//     total: 5000000,
-//     status: "Draft",
-//     tanggalJatuhTempo: new Date("2023-06-15"),
-//   },
-//   {
-//     id: 2,
-//     nomorPO: "PO-2023-002",
-//     tanggalPesan: new Date("2023-06-05"),
-//     namaSupplier: "CV Maju Jaya",
-//     total: 3500000,
-//     status: "Dipesan",
-//     tanggalJatuhTempo: new Date("2023-06-20"),
-//   },
-//   { id: 3, nomorPO: "PO-2023-003", tanggalPesan: new Date("2023-06-10"), namaSupplier: "UD Sejahtera", total: 2800000, status: "Sebagian Diterima", tanggalJatuhTempo: new Date("2023-06-25") },
-//   { id: 4, nomorPO: "PO-2023-004", tanggalPesan: new Date("2023-06-15"), namaSupplier: "PT Barang Lengkap", total: 4200000, status: "Selesai Diterima", tanggalJatuhTempo: new Date("2023-06-30") },
-//   { id: 5, nomorPO: "PO-2023-005", tanggalPesan: new Date("2023-06-20"), namaSupplier: "CV Abadi Jaya", total: 1800000, status: "Dibatalkan", tanggalJatuhTempo: new Date("2023-07-05") },
-// ];
 
 // Helper function untuk mendapatkan warna badge berdasarkan status
 const getStatusBadgeVariant = (status: string) => {
@@ -86,6 +77,7 @@ export default function PurchaseOrdersPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("Semua");
   const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10); // Add pageSize state
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [poToDelete, setPoToDelete] = useState<{
     id: number;
@@ -105,6 +97,7 @@ export default function PurchaseOrdersPage() {
     queryKey: [
       "purchaseOrders",
       currentPage,
+      pageSize, // Add pageSize to queryKey
       searchQuery,
       statusFilter,
       dateRange,
@@ -112,7 +105,7 @@ export default function PurchaseOrdersPage() {
     queryFn: async () => {
       const params = new URLSearchParams();
       params.append("page", currentPage.toString());
-      params.append("limit", "10"); // Assuming 10 items per page
+      params.append("limit", pageSize.toString()); // Use pageSize
       if (searchQuery) {
         params.append("search", searchQuery);
       }
@@ -138,6 +131,7 @@ export default function PurchaseOrdersPage() {
 
   const purchaseOrders = purchaseOrdersData?.data || [];
   const totalPages = purchaseOrdersData?.meta?.totalPages || 1;
+  const totalCount = purchaseOrdersData?.meta?.totalCount || 0; // Add totalCount
 
   // Handle search input change
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -398,38 +392,64 @@ export default function PurchaseOrdersPage() {
       </div>
 
       {/* Pagination Controls */}
-      {totalPages > 1 && (
-        <div className="flex justify-center mt-4">
-          <div className="flex space-x-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => handlePageChange(currentPage - 1)}
-              disabled={currentPage === 1}
-            >
-              Sebelumnya
-            </Button>
-            {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
-              <Button
-                key={page}
-                variant={currentPage === page ? "default" : "outline"}
-                size="sm"
-                onClick={() => handlePageChange(page)}
-              >
-                {page}
-              </Button>
-            ))}
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => handlePageChange(currentPage + 1)}
-              disabled={currentPage === totalPages}
-            >
-              Selanjutnya
-            </Button>
-          </div>
+      <div className="flex justify-end items-center space-x-2 pt-4 me-5">
+        {/* Rows per page control */}
+        <div className="flex items-center space-x-2">
+          <p className="text-sm font-medium">Rows per page</p>
+          <Select
+            value={pageSize.toString()}
+            onValueChange={(value) => {
+              setPageSize(Number(value));
+              setCurrentPage(1); // Reset to first page when page size changes
+            }}
+          >
+            <SelectTrigger className="h-8 w-[70px]">
+              <SelectValue placeholder={pageSize} />
+            </SelectTrigger>
+            <SelectContent side="top">
+              {[10, 20, 30, 40, 50].map((size) => (
+                <SelectItem key={size} value={size.toString()}>
+                  {size}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
-      )}
+        {/* End Rows per page control */}
+        <div className="flex items-center space-x-2">
+          <span className="font-medium text-sm">
+            Page {currentPage} dari {totalPages}
+          </span>
+          <Button
+            variant="outline"
+            onClick={handleFirstPage}
+            disabled={currentPage === 1 || isLoading}
+          >
+            <ChevronsLeft className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="outline"
+            onClick={handlePreviousPage}
+            disabled={currentPage === 1 || isLoading}
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="outline"
+            onClick={handleNextPage}
+            disabled={currentPage === totalPages || isLoading}
+          >
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="outline"
+            onClick={handleLastPage}
+            disabled={currentPage === totalPages || isLoading}
+          >
+            <ChevronsRight className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
 
       {/* Delete Confirmation Dialog */}
       <AlertDialog
@@ -459,3 +479,19 @@ export default function PurchaseOrdersPage() {
     </div>
   );
 }
+
+const handleFirstPage = () => {
+  setCurrentPage(1);
+};
+
+const handlePreviousPage = () => {
+  setCurrentPage((prev) => Math.max(prev - 1, 1));
+};
+
+const handleNextPage = () => {
+  setCurrentPage((prev) => Math.min(prev + 1, totalPages));
+};
+
+const handleLastPage = () => {
+  setCurrentPage(totalPages);
+};

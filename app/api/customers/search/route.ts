@@ -26,6 +26,8 @@ export async function GET(request: Request) {
         noTelp: true,
         poinLoyalitas: true,
         alamat: true,
+        kota: true,
+        kodePos: true,
       },
       take: 10,
     });

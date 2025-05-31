@@ -32,10 +32,24 @@ import {
   deleteSupplierAction,
 } from "@/lib/actions/supplier.actions";
 import { toast } from "sonner";
+import {
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
+} from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 export default function SuppliersPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [selectedSupplier, setSelectedSupplier] = useState<{
     id: number;
@@ -60,17 +74,18 @@ export default function SuppliersPage() {
     isLoading,
     refetch,
   } = useQuery({
-    queryKey: ["suppliers", currentPage, searchQuery],
+    queryKey: ["suppliers", currentPage, pageSize, searchQuery],
     queryFn: () =>
       getSuppliers({
         page: currentPage,
-        limit: 10,
+        limit: pageSize,
         search: searchQuery,
       }),
   });
 
   const suppliers = suppliersData?.data || [];
   const totalPages = suppliersData?.meta?.totalPages || 1;
+  const totalCount = suppliersData?.meta?.totalCount || 0;
 
   // Handle search input change
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -79,8 +94,20 @@ export default function SuppliersPage() {
   };
 
   // Handle pagination
-  const handlePageChange = (page: number) => {
-    setCurrentPage(page);
+  const handlePreviousPage = () => {
+    setCurrentPage((prev) => Math.max(prev - 1, 1));
+  };
+
+  const handleNextPage = () => {
+    setCurrentPage((prev) => Math.min(prev + 1, totalPages));
+  };
+
+  const handleFirstPage = () => {
+    setCurrentPage(1);
+  };
+
+  const handleLastPage = () => {
+    setCurrentPage(totalPages);
   };
 
   // Handle edit supplier
@@ -160,7 +187,12 @@ export default function SuppliersPage() {
       {/* Header & Main Actions */}
       <div className="flex mx-5 justify-between items-center">
         <h1 className="text-2xl font-bold">Manajemen Supplier</h1>
-        <Button onClick={() => setIsFormOpen(true)}>
+        <Button
+          onClick={() => {
+            setSelectedSupplier(null);
+            setIsFormOpen(true);
+          }}
+        >
           <PlusCircle className="mr-2 h-4 w-4" />
           Tambah Supplier Baru
         </Button>
@@ -199,7 +231,9 @@ export default function SuppliersPage() {
           <TableBody>
             {suppliers.map((supplier, index) => (
               <TableRow key={supplier.id}>
-                <TableCell>{(currentPage - 1) * 10 + index + 1}</TableCell>
+                <TableCell>
+                  {(currentPage - 1) * pageSize + index + 1}
+                </TableCell>
                 <TableCell>{supplier.nama}</TableCell>
                 <TableCell>{supplier.namaKontak}</TableCell>
                 <TableCell>{supplier.noTelp}</TableCell>
@@ -238,36 +272,64 @@ export default function SuppliersPage() {
       </div>
 
       {/* Pagination Controls */}
-      {totalPages > 1 && (
-        <div className="flex justify-center space-x-2 mt-4">
+      <div className="flex justify-end items-center space-x-2 me-5">
+        {/* Rows per page control */}
+        <div className="flex items-center space-x-2">
+          <p className="text-sm font-medium">Rows per page</p>
+          <Select
+            value={pageSize.toString()}
+            onValueChange={(value) => {
+              setPageSize(Number(value));
+              setCurrentPage(1); // Reset to first page when page size changes
+            }}
+          >
+            <SelectTrigger className="h-8 w-[70px]">
+              <SelectValue placeholder={pageSize} />
+            </SelectTrigger>
+            <SelectContent side="top">
+              {[10, 20, 30, 40, 50].map((size) => (
+                <SelectItem key={size} value={size.toString()}>
+                  {size}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        {/* End Rows per page control */}
+        <div className="flex items-center space-x-2">
+          <span className="font-medium text-sm">
+            Page {currentPage} dari {totalPages}
+          </span>
           <Button
             variant="outline"
-            size="sm"
-            onClick={() => handlePageChange(currentPage - 1)}
-            disabled={currentPage === 1}
+            onClick={handleFirstPage}
+            disabled={currentPage === 1 || isLoading}
           >
-            Sebelumnya
+            <ChevronsLeft className="h-4 w-4" />
           </Button>
-          {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
-            <Button
-              key={page}
-              variant={currentPage === page ? "default" : "outline"}
-              size="sm"
-              onClick={() => handlePageChange(page)}
-            >
-              {page}
-            </Button>
-          ))}
           <Button
             variant="outline"
-            size="sm"
-            onClick={() => handlePageChange(currentPage + 1)}
-            disabled={currentPage === totalPages}
+            onClick={handlePreviousPage}
+            disabled={currentPage === 1 || isLoading}
           >
-            Selanjutnya
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="outline"
+            onClick={handleNextPage}
+            disabled={currentPage === totalPages || isLoading}
+          >
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="outline"
+            onClick={handleLastPage}
+            disabled={currentPage === totalPages || isLoading}
+          >
+            <ChevronsRight className="h-4 w-4" />
           </Button>
         </div>
-      )}
+      </div>
 
       {/* Add/Edit Supplier Dialog */}
       <SupplierFormDialog

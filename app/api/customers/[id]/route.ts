@@ -68,6 +68,75 @@ export async function GET(request: Request) {
   }
 }
 
+export async function PUT(
+  request: Request,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const id = parseInt(params.id, 10);
+    const body = await request.json();
+
+    if (isNaN(id)) {
+      return NextResponse.json(
+        { success: false, error: "Invalid customer ID" },
+        { status: 400 }
+      );
+    }
+
+    const updatedCustomer = await prisma.pelanggan.update({
+      where: { id: id },
+      data: {
+        nama: body.nama,
+        jenisKelamin: body.jenisKelamin || null,
+        noTelp: body.noTelp || null,
+        alamat: body.alamat || null,
+        email: body.email || null,
+        kota: body.kota || null,
+        kodePos: body.kodePos || null,
+        tanggalRegistrasi: body.tanggalRegistrasi
+          ? new Date(body.tanggalRegistrasi)
+          : null,
+      },
+    });
+
+    return NextResponse.json({ success: true, data: updatedCustomer });
+  } catch (error: any) {
+    console.error("Error updating customer:", error);
+    return NextResponse.json(
+      { success: false, error: error.message || "Failed to update customer" },
+      { status: 500 }
+    );
+  }
+}
+
+export async function DELETE(
+  request: Request,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const id = parseInt(params.id, 10);
+
+    if (isNaN(id)) {
+      return NextResponse.json(
+        { success: false, error: "Invalid customer ID" },
+        { status: 400 }
+      );
+    }
+
+    await prisma.pelanggan.delete({
+      where: { id: id },
+    });
+
+    return NextResponse.json({ success: true, data: null });
+  } catch (error: any) {
+    console.error("Error deleting customer:", error);
+    return NextResponse.json(
+      { success: false, error: error.message || "Failed to delete customer" },
+      { status: 500 }
+    );
+  }
+}
+
 export async function POST(request: Request) {
   console.log("Received POST request to /api/customers");
   try {

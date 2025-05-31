@@ -22,6 +22,12 @@ const DashboardLayout = ({ children }: { children: React.ReactNode }) => {
         return "Manajemen Kategori Barang";
       case "/inventory/stock-adjustments":
         return "Penyesuaian Stok";
+      case "/purchases/suppliers":
+        return "Manajemen Supplier";
+      case "/purchases/orders":
+        return "Daftar Pesanan Pembelian";
+      case "/purchases/orders/new":
+        return "Buat Pesanan Pembelian";
       case "/customers":
         return "Daftar Pelanggan";
       case "/reports/inventory-status":

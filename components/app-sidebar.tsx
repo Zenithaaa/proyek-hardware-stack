@@ -175,7 +175,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           <SidebarMenuItem>
             <SidebarMenuButton size="lg" asChild>
               <a href="#">
-                <div className="flex aspect-square size-8 items-center justify-center ">
+                <div className="flex aspect-square size-8 items-center justify-center">
                   <Image
                     src="/logo.svg"
                     alt="Picture of the author"

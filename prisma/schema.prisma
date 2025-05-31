@@ -157,6 +157,9 @@ model Pelanggan {
   email             String?   @unique @db.VarChar(100)
   poinLoyalitas     Int?      @default(0) @map("PoinLoyalitas")
   tanggalRegistrasi DateTime? @default(now()) @map("TanggalRegistrasi")
+  catatan           String?
+  kota              String?
+  kodePos           String?
   transaksi         TransaksiPenjualan[]
 
   @@map("tbl_pelanggan")

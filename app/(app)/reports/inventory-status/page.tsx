@@ -541,7 +541,9 @@ export default function InventoryStatusPage() {
                   <TableHead className="text-right">
                     Nilai Stok Jual (Rp)
                   </TableHead>
+                  {/* 
                   <TableHead className="text-center">Aksi</TableHead>
+                  */}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -597,11 +599,13 @@ export default function InventoryStatusPage() {
                           }
                         }}
                       >
+                        {/*
                         <DialogTrigger asChild>
                           <Button variant="ghost" size="icon">
                             <History className="h-4 w-4" />
                           </Button>
                         </DialogTrigger>
+                        */}
                         {selectedItemForStockCard && (
                           <DialogContent className="max-w-3xl">
                             <DialogHeader>
@@ -698,74 +702,76 @@ export default function InventoryStatusPage() {
         </CardContent>
       </Card>
 
-      {/* VI. Paginasi Tabel */}
-      {!isLoading && totalPages > 1 && (
-        <Pagination>
-          <PaginationContent>
-            <PaginationItem>
-              <PaginationPrevious
-                href="#"
-                onClick={(e) => {
-                  e.preventDefault();
-                  handlePageChange(currentPage - 1);
-                }}
-                className={
-                  currentPage === 1
-                    ? "pointer-events-none opacity-50"
-                    : undefined
-                }
-                aria-disabled={currentPage === 1}
-              />
-            </PaginationItem>
-            {/* Simple Pagination: Show current page and a few around it */}
-            {/* For more complex pagination, consider a helper function to generate page numbers */}
-            {[...Array(totalPages)].map((_, i) => {
-              const pageNum = i + 1;
-              // Basic logic to show limited page numbers: first, last, current, and 2 around current
-              if (
-                pageNum === 1 ||
-                pageNum === totalPages ||
-                (pageNum >= currentPage - 1 && pageNum <= currentPage + 1)
-              ) {
-                return (
-                  <PaginationItem key={pageNum}>
-                    <PaginationLink
-                      href="#"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        handlePageChange(pageNum);
-                      }}
-                      isActive={currentPage === pageNum}
-                    >
-                      {pageNum}
-                    </PaginationLink>
-                  </PaginationItem>
-                );
-              }
-              // Add ellipsis for gaps
-              if (pageNum === currentPage - 2 || pageNum === currentPage + 2) {
-                return <PaginationEllipsis key={`ellipsis-${pageNum}`} />;
-              }
-              return null;
-            })}
-            <PaginationItem>
-              <PaginationNext
-                href="#"
-                onClick={(e) => {
-                  e.preventDefault();
-                  handlePageChange(currentPage + 1);
-                }}
-                className={
-                  currentPage === totalPages
-                    ? "pointer-events-none opacity-50"
-                    : undefined
-                }
-                aria-disabled={currentPage === totalPages}
-              />
-            </PaginationItem>
-          </PaginationContent>
-        </Pagination>
-      )}
+      {/* V. Area Paginasi */}
+      <div className="flex items-center justify-between px-2">
+        <div className="flex-1 text-sm text-muted-foreground">
+          Menampilkan {stockItems.length} dari {kpis.totalSKU} item.
+        </div>
+        <div className="flex flex-col sm:flex-row items-center space-y-2 sm:space-y-0 sm:space-x-6 lg:space-x-8">
+          <div className="flex items-center space-x-2">
+            <p className="text-sm font-medium">Baris per halaman</p>
+            <Select
+              value={`${limit}`}
+              onValueChange={(value) => {
+                setLimit(Number(value));
+                handlePageChange(1); // Reset to first page when limit changes
+              }}
+            >
+              <SelectTrigger className="h-8 w-[70px]">
+                <SelectValue placeholder={limit} />
+              </SelectTrigger>
+              <SelectContent side="top">
+                {[10, 20, 30, 40, 50].map((pageSize) => (
+                  <SelectItem key={pageSize} value={`${pageSize}`}>
+                    {pageSize}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex w-[100px] items-center justify-center text-sm font-medium">
+            Page {currentPage} dari {totalPages}
+          </div>
+          <div className="flex items-center space-x-2">
+            <Button
+              variant="outline"
+              className="h-8 w-8 p-0"
+              onClick={() => handlePageChange(1)}
+              disabled={currentPage === 1}
+            >
+              <span className="sr-only">Go to first page</span>
+              {"<<"}
+            </Button>
+            <Button
+              variant="outline"
+              className="h-8 w-8 p-0"
+              onClick={() => handlePageChange(currentPage - 1)}
+              disabled={currentPage === 1}
+            >
+              <span className="sr-only">Go to previous page</span>
+              {"<"}
+            </Button>
+            <Button
+              variant="outline"
+              className="h-8 w-8 p-0"
+              onClick={() => handlePageChange(currentPage + 1)}
+              disabled={currentPage === totalPages}
+            >
+              <span className="sr-only">Go to next page</span>
+              {">"}
+            </Button>
+            <Button
+              variant="outline"
+              className="h-8 w-8 p-0"
+              onClick={() => handlePageChange(totalPages)}
+              disabled={currentPage === totalPages}
+            >
+              <span className="sr-only">Go to last page</span>
+              {">>"}
+            </Button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

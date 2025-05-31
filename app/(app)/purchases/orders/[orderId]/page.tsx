@@ -294,7 +294,7 @@ export default function CreatePurchaseOrderPage() {
           >
             <ChevronLeft className="h-4 w-4" />
           </Button>
-          <h1 className="text-2xl font-bold">Buat Pesanan Pembelian Baru</h1>
+          <h1 className="text-2xl font-bold">Edit Pesanan Pembelian</h1>
         </div>
       </div>
 
