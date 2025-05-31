@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+{/*import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import {
   Prisma,
@@ -215,13 +215,5 @@ export async function GET(request: Request) {
       labaBersihSetelahPajak: labaBersihSetelahPajak.toNumber(),
       monthlyChartData: monthlyChartData, // Add monthly data for chart
     };
-
     return NextResponse.json(reportData);
-  } catch (error) {
-    console.error("Error fetching profit/loss report:", error);
-    return NextResponse.json(
-      { error: "Failed to fetch report data" },
-      { status: 500 }
-    );
-  }
-}
+*/}

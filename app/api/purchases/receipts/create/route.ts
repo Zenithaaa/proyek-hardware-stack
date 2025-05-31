@@ -111,8 +111,7 @@ export async function POST(request: Request) {
             id: pembelianIdInt,
           },
           data: {
--           status: "Diterima Lengkap", // Or your desired status
-+           status: poStatus,
+           status: poStatus,
           },
         });
 
