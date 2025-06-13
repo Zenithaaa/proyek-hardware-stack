@@ -1,5 +1,3 @@
-// File: app/(app)/dashboard/page.tsx
-
 import { ChartAreaInteractive } from "@/components/chart-area-interactive";
 import { DataTable, ItemData } from "@/components/data-table";
 import SectionCards from "@/components/section-cards";
@@ -23,8 +21,6 @@ async function getItemsForDataTable(): Promise<ItemData[]> {
   });
 
   return items.map((item) => {
-    // Pastikan Anda menggunakan nama relasi yang benar dari skema Prisma Anda
-    // Jika relasinya adalah detailTransaksiPenjualan, gunakan itu.
     const totalTerjual = item.detailTransaksi.reduce(
       // atau item.detailTransaksiPenjualan
       (sum, detail) => sum + detail.jumlah,

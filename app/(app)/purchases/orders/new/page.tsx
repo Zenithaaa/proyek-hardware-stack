@@ -35,23 +35,6 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 
-// Dummy data untuk contoh tampilan
-// const dummySuppliers = [
-//   { id: 1, nama: "PT Supplier Utama" },
-//   { id: 2, nama: "CV Maju Jaya" },
-//   { id: 3, nama: "UD Sejahtera" },
-//   { id: 4, nama: "PT Barang Lengkap" },
-//   { id: 5, nama: "CV Abadi Jaya" },
-// ];
-
-// const dummyItems = [
-//   { id: 1, nama: "Paku 2 Inch", kodeBarcode: "BRG001", satuan: "Box", hargaBeli: 25000 },
-//   { id: 2, nama: "Cat Tembok 5kg", kodeBarcode: "BRG002", satuan: "Kaleng", hargaBeli: 85000 },
-//   { id: 3, nama: "Semen 50kg", kodeBarcode: "BRG003", satuan: "Sak", hargaBeli: 75000 },
-//   { id: 4, nama: "Kuas Cat 4 Inch", kodeBarcode: "BRG004", satuan: "Pcs", hargaBeli: 15000 },
-//   { id: 5, nama: "Pipa PVC 4m", kodeBarcode: "BRG005", satuan: "Batang", hargaBeli: 45000 },
-// ];
-
 // Interface untuk item PO
 interface POItem {
   id: number;
@@ -300,28 +283,31 @@ export default function CreatePurchaseOrderPage() {
   };
 
   return (
-    <div className="container py-6 space-y-6">
+    <div className="container py-6 px-4 space-y-6">
       {/* Header */}
-      <div className="flex items-center ml-5 justify-between">
-        <div className="flex items-center space-x-4">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center space-x-2">
           <Button
             variant="outline"
             size="icon"
+            className="h-8 w-8 sm:h-10 sm:w-10"
             onClick={() => router.push("/purchases/orders")}
           >
-            <ChevronLeft className="h-4 w-4" />
+            <ChevronLeft className="h-3 w-3 sm:h-4 sm:w-4" />
           </Button>
-          <h1 className="text-2xl font-bold">Buat Pesanan Pembelian Baru</h1>
+          <h1 className="text-xl font-bold sm:text-2xl">
+            Buat Pesanan Pembelian Baru
+          </h1>
         </div>
       </div>
 
       {/* Form */}
-      <div className="grid gap-6 mx-5">
+      <div className="grid gap-4 sm:gap-6">
         {/* Header PO */}
         <Card>
           <CardContent className="pt-6">
-            <div className="grid gap-6 md:grid-cols-2">
-              <div className="space-y-4">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-3 sm:space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="supplier">
                     Supplier <span className="text-destructive">*</span>
@@ -420,7 +406,7 @@ export default function CreatePurchaseOrderPage() {
                 </div>
               </div>
 
-              <div className="space-y-4">
+              <div className="space-y-3 sm:space-y-4-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="nomorPO">
                     Nomor PO <span className="text-destructive">*</span>
@@ -465,8 +451,8 @@ export default function CreatePurchaseOrderPage() {
             <h2 className="text-xl font-semibold mb-4">Detail Item PO</h2>
 
             {/* Form tambah item */}
-            <div className="grid gap-4 md:grid-cols-5 mb-6">
-              <div className="md:col-span-2">
+            <div className="grid gap-3 sm:grid-cols-5">
+              <div className="sm:col-span-2">
                 <Label htmlFor="pilihBarang">Pilih Barang</Label>
                 <Select onValueChange={handleItemSelect}>
                   <SelectTrigger id="pilihBarang">
@@ -513,8 +499,8 @@ export default function CreatePurchaseOrderPage() {
             </div>
 
             {/* Tabel item */}
-            <div className="border rounded-md">
-              <Table>
+            <div className="border rounded-md overflow-x-auto mt-4">
+              <Table className="min-w-full">
                 <TableHeader>
                   <TableRow>
                     <TableHead>Nama Barang</TableHead>
@@ -652,9 +638,11 @@ export default function CreatePurchaseOrderPage() {
 
         {/* Action Buttons */}
         <div className="flex justify-end space-x-4 mx-5">
+          {/* 
           <Button variant="outline" onClick={handleSaveAsDraft}>
             Simpan sebagai Draft
           </Button>
+          */}
           <Button onClick={handleSaveAndSend}>Simpan dan Kirim PO</Button>
         </div>
       </div>

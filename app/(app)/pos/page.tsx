@@ -1718,8 +1718,9 @@ export default function POSPage() {
             <span>Rp {getCalculationDetails().total.toLocaleString()}</span>
           </div>
           <Tabs defaultValue="cash" className="w-full grid-cols-2">
-            <TabsList className="grid w-full grid-cols-1 lg:grid-cols-4 gap-1">
+            <TabsList className="grid w-full grid-cols-1  gap-1">
               <TabsTrigger value="cash">Tunai</TabsTrigger>
+              {/* 
               <TabsTrigger
                 value="debit_credit"
                 disabled
@@ -1742,6 +1743,7 @@ export default function POSPage() {
                   Segera Hadir
                 </Badge>
               </TabsTrigger>
+              */}
             </TabsList>
 
             {payments.map((payment, index) => (

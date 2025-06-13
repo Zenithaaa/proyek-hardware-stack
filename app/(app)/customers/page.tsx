@@ -1,15 +1,12 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import {
-  PlusCircle,
   Edit,
   Trash2,
-  History,
-  Search,
   UserPlus,
   ChevronLeft,
   ChevronRight,
@@ -47,7 +44,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import {
   Popover,
   PopoverContent,
@@ -71,7 +67,6 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 import { Textarea } from "@/components/ui/textarea";
@@ -373,7 +368,9 @@ export default function CustomersPage() {
               <TableHead>Email</TableHead>
               <TableHead>Kota</TableHead>
               <TableHead>Kode Pos</TableHead>
+              {/* 
               <TableHead>Poin Loyalitas</TableHead>
+              */}
               <TableHead>Tgl. Registrasi</TableHead>
               <TableHead className="text-right">Aksi</TableHead>
             </TableRow>
@@ -691,7 +688,7 @@ export default function CustomersPage() {
                   </FormItem>
                 )}
               />
-              {/* Loyalty Points - Read Only */}
+              {/* Loyalty Points - Read Only 
               {selectedCustomer && (
                 <FormField
                   control={form.control}
@@ -712,6 +709,8 @@ export default function CustomersPage() {
                   )}
                 />
               )}
+              */}
+              
               <DialogFooter>
                 <Button
                   type="submit"

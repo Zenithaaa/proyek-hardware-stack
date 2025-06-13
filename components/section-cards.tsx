@@ -198,7 +198,7 @@ export default async function SectionCards() {
           </CardAction>
         </CardHeader>
         <CardFooter className="text-sm text-muted-foreground">
-          vs. bulan lalu
+          Total Pendapatan Bulan Ini
         </CardFooter>
       </Card>
 
@@ -244,7 +244,7 @@ export default async function SectionCards() {
           </CardAction>
         </CardHeader>
         <CardFooter className="text-sm text-muted-foreground">
-          vs. bulan lalu
+          Total Penjualan Bulan Ini
         </CardFooter>
       </Card>
 

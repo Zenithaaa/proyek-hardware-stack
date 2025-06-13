@@ -21,22 +21,12 @@ import {
 } from "@/components/ui/table";
 import { DatePickerWithRange } from "@/components/ui/date-picker-with-range";
 import {
-  Pagination,
-  PaginationContent,
-  PaginationEllipsis,
-  PaginationItem,
-  PaginationLink,
-  PaginationNext,
-  PaginationPrevious,
-} from "@/components/ui/pagination";
-import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
-import { History, FileDown, Printer } from "lucide-react";
+import { Printer } from "lucide-react";
 import { DateRange } from "react-day-picker";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 
@@ -332,7 +322,7 @@ export default function InventoryStatusPage() {
   if (isLoading && stockItems.length === 0 && currentPage === 1) {
     // Show loading only on initial load or full filter change
     return (
-      <div className="container mx-auto p-4 text-center">
+      <div className="container mx-auto h-screen flex items-center justify-center p-4 text-center">
         Memuat data laporan stok...
       </div>
     );

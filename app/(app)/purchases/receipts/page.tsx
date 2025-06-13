@@ -5,25 +5,20 @@ import { useRouter } from "next/navigation";
 import { format } from "date-fns";
 import { id } from "date-fns/locale";
 import {
-  ArchiveRestore,
-  CalendarIcon,
   Download,
   Eye,
   Search,
   FilterX,
   PackageCheck,
+  ChevronsLeft,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsRight,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -33,24 +28,15 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import {
-  Pagination,
-  PaginationContent,
-  PaginationEllipsis,
-  PaginationItem,
-  PaginationLink,
-  PaginationNext,
-  PaginationPrevious,
-} from "@/components/ui/pagination";
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Calendar } from "@/components/ui/calendar";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
 import { DatePickerWithRange } from "@/components/ui/date-picker-with-range";
-import { cn } from "@/lib/utils";
 
 type Receipt = {
   id: string;
@@ -215,6 +201,10 @@ export default function ReceiptsPage() {
     return <Badge variant={variant}>{displayText}</Badge>;
   };
 
+  const handleFirstPage = () => {
+    setCurrentPage(1);
+  };
+
   return (
     <div className="container mx-auto py-6 space-y-6">
       {/* Header & Aksi Utama */}
@@ -292,7 +282,9 @@ export default function ReceiptsPage() {
                   <TableHead>No. PO Terkait</TableHead>
                   <TableHead>Nama Supplier</TableHead>
                   <TableHead>Status</TableHead>
+                  {/* 
                   <TableHead className="text-right">Aksi</TableHead>
+                  */}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -365,6 +357,7 @@ export default function ReceiptsPage() {
                       <TableCell>{receipt.namaSupplier}</TableCell>
                       <TableCell>{renderStatusBadge(receipt.status)}</TableCell>
                       <TableCell className="text-right">
+                        {/* 
                         <Button
                           variant="ghost"
                           size="icon"
@@ -372,6 +365,7 @@ export default function ReceiptsPage() {
                         >
                           <Eye className="h-4 w-4" />
                         </Button>
+                        */}
                       </TableCell>
                     </TableRow>
                   ))
@@ -380,47 +374,65 @@ export default function ReceiptsPage() {
             </Table>
           </div>
 
-          {/* Pagination */}
-          {!loading && !error && meta && meta.totalPages > 0 && (
-            <div className="p-4">
-              <Pagination>
-                <PaginationContent>
-                  <PaginationItem>
-                    <PaginationPrevious
-                      onClick={() =>
-                        handlePageChange(Math.max(1, currentPage - 1))
-                      }
-                      disabled={currentPage === 1}
-                    />
-                  </PaginationItem>
-
-                  {Array.from({ length: meta.totalPages }, (_, i) => i + 1).map(
-                    (page) => (
-                      <PaginationItem key={page}>
-                        <PaginationLink
-                          isActive={page === currentPage}
-                          onClick={() => handlePageChange(page)}
-                        >
-                          {page}
-                        </PaginationLink>
-                      </PaginationItem>
-                    )
-                  )}
-
-                  <PaginationItem>
-                    <PaginationNext
-                      onClick={() =>
-                        handlePageChange(
-                          Math.min(meta.totalPages, currentPage + 1)
-                        )
-                      }
-                      disabled={currentPage === meta.totalPages}
-                    />
-                  </PaginationItem>
-                </PaginationContent>
-              </Pagination>
+          {/* Pagination Controls */}
+          <div className="flex justify-end items-center space-x-2 pt-4 me-5">
+            {/* Rows per page control */}
+            <div className="flex items-center space-x-2">
+              <p className="text-sm font-medium">Rows per page</p>
+              <Select
+                value={pageSize.toString()}
+                //onValueChange={(value) => {
+                //setPageSize(Number(value));
+                //setCurrentPage(1); // Reset to first page when page size //changes
+                //}}
+              >
+                <SelectTrigger className="h-8 w-[70px]">
+                  <SelectValue placeholder={pageSize} />
+                </SelectTrigger>
+                <SelectContent side="top">
+                  {[10, 20, 30, 40, 50].map((size) => (
+                    <SelectItem key={size} value={size.toString()}>
+                      {size}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
-          )}
+            {/* End Rows per page control */}
+            <div className="flex items-center space-x-2">
+              <span className="font-medium text-sm">
+                Page {currentPage} dari {1}
+              </span>
+              <Button
+                variant="outline"
+                onClick={handleFirstPage}
+                // disabled={currentPage === 1 || isLoading}
+              >
+                <ChevronsLeft className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="outline"
+                // onClick={handlePreviousPage}
+                // disabled={currentPage === 1 || isLoading}
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="outline"
+                // onClick={handleNextPage}
+                // disabled={currentPage === totalPages || isLoading}
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="outline"
+                // onClick={handleLastPage}
+                // disabled={currentPage === totalPages || isLoading}
+              >
+                <ChevronsRight className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
         </CardContent>
       </Card>
     </div>

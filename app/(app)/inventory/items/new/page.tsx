@@ -219,6 +219,7 @@ export default function InventoryItemsPage() {
               router.refresh();
             }}
           />
+          {/* 
           <ImportExportDialog
             type="import"
             onSuccess={() => {
@@ -226,6 +227,7 @@ export default function InventoryItemsPage() {
               router.refresh();
             }}
           />
+          */}
           <ImportExportDialog type="export" />
         </div>
       </div>
@@ -241,7 +243,7 @@ export default function InventoryItemsPage() {
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
-
+        {/* 
         <div className="flex flex-wrap gap-2 sm:gap-4 w-full sm:w-auto">
           <Select value={selectedKategori} onValueChange={setSelectedKategori}>
             <SelectTrigger className="w-full sm:w-[180px]">
@@ -286,6 +288,7 @@ export default function InventoryItemsPage() {
             </SelectContent>
           </Select>
         </div>
+        */}
       </div>
 
       {/* Tabel Data Barang */}

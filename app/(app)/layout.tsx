@@ -13,27 +13,33 @@ const DashboardLayout = ({ children }: { children: React.ReactNode }) => {
       case "/dashboard":
         return "Dashboard";
       case "/sales/transactions":
-        return "Daftar Transaksi Penjualan";
+        return "Penjualan";
       case "/purchases":
         return "Daftar Transaksi Pembelian";
       case "/inventory/items/new":
-        return "Daftar Barang Inventaris";
+        return "Inventaris";
       case "/inventory/category":
-        return "Manajemen Kategori Barang";
+        return "Inventaris";
       case "/inventory/stock-adjustments":
-        return "Penyesuaian Stok";
+        return "Inventaris";
+      case "/purchases/receipts/new":
+        return "Pembelian";
       case "/purchases/suppliers":
-        return "Manajemen Supplier";
+        return "Pembelian";
       case "/purchases/orders":
-        return "Daftar Pesanan Pembelian";
+        return "Pembelian";
       case "/purchases/orders/new":
-        return "Buat Pesanan Pembelian";
+        return "Pembelian";
+      case "/purchases/orders/:id":
+        return "Pembelian";
       case "/customers":
-        return "Daftar Pelanggan";
+        return "Pelanggan";
+      case "/purchases/receipts":
+        return "Pembelian";
       case "/reports/inventory-status":
-        return "Laporan Stok Barang";
+        return "Laporan";
       case "/reports/sales-summary":
-        return "Laporan Penjualan";
+        return "Laporan";
       case "/reports/purchases":
         return "Laporan Pembelian";
       case "/pos":

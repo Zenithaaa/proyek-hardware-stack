@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { toast } from "sonner";
 import {
   ChevronLeft,
   ChevronRight,
@@ -11,9 +10,6 @@ import {
   Eye,
   FilePlus2,
   Pencil,
-  PlusCircle,
-  Search,
-  Trash,
   Truck,
   XCircle,
 } from "lucide-react";
@@ -28,7 +24,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { PageHeader } from "@/components/shared/PageHeader";
 import { Badge } from "@/components/ui/badge";
 import {
   AlertDialog,
@@ -53,7 +48,6 @@ import {
 import { format } from "date-fns";
 import { id } from "date-fns/locale";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
 
 // Helper function untuk mendapatkan warna badge berdasarkan status
 const getStatusBadgeVariant = (status: string) => {
@@ -86,9 +80,7 @@ export default function PurchaseOrdersPage() {
   const [dateRange, setDateRange] = useState<
     { from?: Date; to?: Date } | undefined
   >(undefined);
-
-  // Fetch purchase orders data with pagination and search
-  // Untuk saat ini menggunakan dummy data
+  
   const {
     data: purchaseOrdersData,
     isLoading,
@@ -131,7 +123,7 @@ export default function PurchaseOrdersPage() {
 
   const purchaseOrders = purchaseOrdersData?.data || [];
   const totalPages = purchaseOrdersData?.meta?.totalPages || 1;
-  const totalCount = purchaseOrdersData?.meta?.totalCount || 0; // Add totalCount
+  const totalCount = purchaseOrdersData?.meta?.totalCount || 0;
 
   // Handle search input change
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -300,7 +292,9 @@ export default function PurchaseOrdersPage() {
               <TableHead>Estimasi Total PO (Rp)</TableHead>
               <TableHead>Status PO</TableHead>
               <TableHead>Tanggal Jatuh Tempo</TableHead>
+              {/* 
               <TableHead className="text-right">Aksi</TableHead>
+              */}
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -335,6 +329,7 @@ export default function PurchaseOrdersPage() {
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-2">
+                      {/*  
                       <Button
                         variant="outline"
                         size="icon"
@@ -345,6 +340,7 @@ export default function PurchaseOrdersPage() {
                           <Eye className="h-4 w-4" />
                         </Link>
                       </Button>
+                      */}
 
                       {po.status === "Draft" && (
                         <Button
